@@ -27,7 +27,8 @@ class PartyBoard:
     save_path: Any = None                                       # where the current rally survives restarts
     clock: Callable[[], float] = time.monotonic
     states: dict[str, Any] = field(default_factory=dict)        # name -> AgentState
-    camp_start: float = 0.5                                     # D30: a member's rest need that makes the room camp
+    camp_start: float = 0.9                                     # D30: a member's rest need that makes the room camp
+    camp_end: float = 0.3                                       # ... and the need below which nobody keeps it going
     ladder: Any = None                                          # anima.party.ladder.Ladder: choose zones by level (D31)
     override_until: float = 0.0                                 # the strategist chose the hunting ground until then
     _zone_of: dict[str, int] = field(default_factory=dict)      # member -> last zone seen in
@@ -46,7 +47,7 @@ class PartyBoard:
         return cls(memoria, list(policies.get("roster", [])), policies.get("leader", ""),
                    {k: list(v) for k, v in (policies.get("roles") or {}).items()}, policies.get("rally"),
                    dict(policies.get("classes") or {}), list(policies.get("circuit") or []), clock=clock,
-                   camp_start=float(policies.get("camp_start", 0.5)),
+                   camp_start=float(policies.get("camp_start", 0.9)), camp_end=float(policies.get("camp_end", 0.3)),
                    trip_cooldown=float(policies.get("trip_cooldown_s", 1200)))
 
     def next_rally(self, agent: str) -> str | None:
@@ -87,6 +88,18 @@ class PartyBoard:
     def mean_span(self) -> float | None:
         spans = [s for n in self.online() if (s := self.span(n))]
         return sum(spans) / len(spans) if spans else None
+
+    def _start_here(self) -> None:
+        """After a (re)start, hunt near where we are instead of walking back to the saved rally (D31)."""
+        if self.clock() < self.override_until:
+            return
+        new = self.ladder.start_here(self.levels(), has_light=self._leader_lit(), span=self.mean_span())
+        if new:
+            self.circuit, self.rally = new, new[0]
+            lead = self.states.get(self.leader)
+            if lead is not None:
+                lead.marks["rally_changed"] = self.clock()
+            self.save()
 
     def _move_on(self, why: str) -> None:
         """Go somewhere else now (a zone just proved too dangerous, or we outgrew it)."""
@@ -136,7 +149,7 @@ class PartyBoard:
         levels = tuple(sorted(self.levels()))
         if not self._ladder_started and len(levels) == len(self.roster) and self.ladder.hub() is not None:
             self._ladder_started = True                    # everyone's level and the leader's room known
-            self._move_on("levels known")
+            self._start_here()
         if levels != self._levels:
             first = False
             grew = bool(self._levels) and min(levels or (0,)) > min(self._levels)
@@ -195,7 +208,7 @@ class PartyBoard:
         """The sentry if the members in my room are camping, else None.
 
         A camp starts when one member's rest need reaches camp_start and ends when nobody in the
-        room needs rest. Then everyone recovers at once instead of one after another. The sentry,
+        room needs more than camp_end (not "everyone full": that kept six asleep for one member's mana). Then everyone recovers at once instead of one after another. The sentry,
         the member with the most hit points when the camp starts, rests awake; the rest sleep."""
         here = self.in_room_with(agent)
         key = self.vnum(agent)
@@ -206,7 +219,7 @@ class PartyBoard:
             if max(needs.values()) < self.camp_start:
                 return None
             self._camps[key] = None
-        elif max(needs.values()) <= 0.0:
+        elif max(needs.values()) <= self.camp_end:
             del self._camps[key]
             return None
         if self._camps[key] not in here:

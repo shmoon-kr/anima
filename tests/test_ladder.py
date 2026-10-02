@@ -75,3 +75,22 @@ def test_a_death_counts_against_the_zone_growth(ladder):
     ladder.gained(z, 0.2)
     ladder.gained(z, -0.5)                                  # half of everything, on the level's scale
     assert ladder.growth(z, 0, 75000, 3)[0] < 0
+
+
+def test_after_a_restart_we_stay_in_a_fitting_zone_where_we_are(memoria_proto):
+    lv = [8, 8, 7, 7, 8, 9]
+    temple = memoria_proto.graph.rooms_named("The Temple Square")[0]
+    zone = Ladder(memoria_proto, hub=lambda: temple, clock=lambda: 0).candidates(lv, span=75000)[0].zone
+    inside = max(v for v, r in memoria_proto.world.rooms.items() if r.zone == zone)
+    lad = Ladder(memoria_proto, hub=lambda: inside, clock=lambda: 0)
+    circuit = lad.start_here(lv, span=75000)
+    first = memoria_proto.graph.rooms_named(circuit[0])
+    assert len(first) == 1 and memoria_proto.world.rooms[first[0]].zone == zone     # stay, unambiguous name
+
+
+def test_after_a_restart_in_an_unfit_zone_we_go_to_a_near_good_one(ladder):
+    circuit = ladder.start_here([8, 8, 7, 7, 8, 9], span=75000)      # the temple: not a hunting zone
+    fits = {f.entrance: f for f in ladder.candidates([8, 8, 7, 7, 8, 9], span=75000)}
+    best = max(f.expected_growth for f in fits.values())
+    good = [f for f in fits.values() if f.expected_growth >= best / 2]
+    assert fits[circuit[0]].steps == min(f.steps for f in good)

@@ -18,13 +18,15 @@ policies:
   circuit: ["The Entrance To The Newbie Zone", "The End Of The Path"]
   zone_ladder: true                   # 사냥터를 레벨에 맞는 지역에서 고르고, 위험했던 곳은 레벨이 오를 때까지 피한다 (D31)
   trip_cooldown_s: 1200              # 장보기 사이 최소 간격 (D32)
-  camp_start: 0.5                     # 한 명의 휴식 필요(0~1)가 이만큼이면 같은 방 파티가 야영 (D30)
+  camp_start: 0.9                     # 한 명의 휴식 필요(0~1)가 이만큼이면 같은 방 파티가 야영 (D30)
+  camp_end: 0.3                       # 아무의 필요도 이보다 크지 않으면 야영 끝 (다 찰 때까지 기다리지 않는다)
 animus:
   policies:                           # 파티 값: animus:party 레이어(전략가)만 바꿀 수 있다
     rally:   {type: room, party: true}
     circuit: {type: rooms, party: true, max_len: 4}
     leash:   {type: number, min: 5, max: 40, step: 10, party: true}
     camp_start: {type: number, min: 0.2, max: 1.0, step: 0.2, party: true}
+    camp_end: {type: number, min: 0.0, max: 0.6, step: 0.2, party: true}
     trip_cooldown_s: {type: number, min: 600, max: 3600, step: 600, party: true}
 behaviors:
   # 야영 (D30): 한 명이 쉬어야 하면 어차피 아무도 못 움직이니 같이 회복한다.

@@ -144,6 +144,46 @@ class Ladder:
             out.sort(key=lambda f: abs(f.median_level - target) + f.steps / 10)     # a level ~ ten steps
         return out
 
+    def rally_in_zone(self, zone: int, near: int, has_light: bool = True) -> str | None:
+        """A rally point inside `zone` close to `near`: the nearest room whose name exists only once in
+        the world, so "are we in the rally zone" is never confused by a same-named room elsewhere."""
+        g, rooms = self.memoria.graph, self.memoria.world.rooms
+        cond = self.memoria.conditions(has_light=has_light, zone=zone)
+        dist, q = {near: 0}, deque([near])
+        while q:
+            v = q.popleft()
+            if len(g.rooms_named(rooms[v].name)) == 1:
+                return rooms[v].name
+            for to in g.exits_from(v, cond).values():
+                if to not in dist:
+                    dist[to] = dist[v] + 1
+                    q.append(to)
+        return None
+
+    def start_here(self, levels: Iterable[int], has_light: bool = True, span: float | None = None,
+                   size: int = 3) -> list[str]:
+        """After a (re)start: a circuit beginning near where we are. If our zone fits, we stay in it;
+        otherwise the nearest zone whose expected growth is at least half the best one's."""
+        start = self.hub()
+        fits = self.candidates(levels, has_light, span)
+        if start is None or not fits:
+            return []
+        here_zone = self.memoria.world.rooms[start].zone
+        first: str | None = None
+        if any(f.zone == here_zone for f in fits):
+            first = self.rally_in_zone(here_zone, start, has_light)
+        if first is None:
+            best = max((f.expected_growth or 0) for f in fits)
+            near = [f for f in fits if (f.expected_growth or 0) >= best / 2] or fits
+            first = min(near, key=lambda f: f.steps).entrance
+        out = [first]
+        for f in fits:
+            if f.entrance not in out and f.zone != here_zone:
+                out.append(f.entrance)
+            if len(out) == size:
+                break
+        return out
+
     def circuit(self, levels: Iterable[int], has_light: bool = True, size: int = 2,
                 span: float | None = None) -> list[str]:
         """Rally points for the party: the best fitting zones' entrances."""
