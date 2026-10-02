@@ -1,7 +1,7 @@
-import os
 from pathlib import Path
 
 import pytest
+from conftest import world_dir
 
 from anima.adapters.tbamud_text.replay import replay_file
 from anima.bus import Bus
@@ -9,7 +9,7 @@ from anima.memoria import Memoria
 from anima.memoria.graph import Conditions
 from anima.protocol.envelope import Event
 
-WORLD = Path(os.environ.get("ANIMA_TBAMUD_WORLD", Path(__file__).parents[2] / "tbamud" / "lib" / "world"))
+WORLD = world_dir()
 HAZARDS = Path(__file__).parents[1] / "third_party" / "tbamud" / "hazards.yaml"
 FIX = Path(__file__).parents[1] / "third_party" / "tbamud" / "fixtures"
 pytestmark = pytest.mark.skipif(not WORLD.exists(), reason="tbaMUD world files not present")

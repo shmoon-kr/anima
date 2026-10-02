@@ -33,7 +33,7 @@ class PartyBoard:
     def from_policies(cls, memoria: Memoria, policies: dict[str, Any], clock: Callable[[], float] = time.monotonic):
         return cls(memoria, list(policies.get("roster", [])), policies.get("leader", ""),
                    {k: list(v) for k, v in (policies.get("roles") or {}).items()}, policies.get("rally"),
-                   dict(policies.get("classes") or {}), list(policies.get("circuit") or []), clock)
+                   dict(policies.get("classes") or {}), list(policies.get("circuit") or []), clock=clock)
 
     def next_rally(self, agent: str) -> str | None:
         """The leader moves the party's hunting ground to the next place in the circuit."""

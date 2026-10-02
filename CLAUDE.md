@@ -5,7 +5,8 @@ MUD 세계에서 AI 에이전트(와 사람)가 살아가게 하는 런타임. t
 
 세션을 시작하면 먼저 읽을 것:
 - `docs/VISION.md`   전체 그림과 용어 (거의 안 바뀜)
-- `docs/PHASE-1.md`  지금 단계의 목표, 범위, 완료 조건  ← 현재 작업
+- `docs/PHASE-2.md`  지금 단계의 목표, 범위, 완료 조건  ← 현재 작업
+- `docs/PHASE-1.md`  끝난 1단계와 결과, 기준선은 `docs/BASELINE.md`
 - `docs/DECISIONS.md` 이미 내린 결정과 이유. 뒤집으려면 먼저 사용자에게 물을 것
 - `docs/SPEC-from-tintin.md` 1단계 행동 명세 (mud-agents 에서 옮긴 "무엇")
 

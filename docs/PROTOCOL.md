@@ -226,3 +226,5 @@ LLM 은 느린 감각기관이다. 질문은 비동기, 답은 이벤트로 온�
 - v0 (2026-10-02): 초안. 사용자 검토 반영: 엔진 계약/내부 분리, 선택 `id`·`damage` 자리, 비밀 보호, `world.time`/`world.weather`, occupants `hints`, `"self"` 정규화 규칙.
 - v0 (2026-10-02, M2 재생 반영, 호환 추가): `command.refused`, `occupant.position`, `occupant.link`, `combat.rescue`, `combat.aggro`, `items.give_failed` 추가. `skill.result.skill` null 허용과 reason 값 추가, `group.change` `follower_left`, `items.used` drop/junk/donate, 몇몇 선택 필드. 전부 6개 로그 재생의 unknown 상위 줄에서 나온 실제 서버 문구.
 - v0 (2026-10-02, 확정 후 정정): occupants 그룹 표시 `(group)`/`(leader)` 는 실제로 있음 — 색으로 같은/다른 그룹 힌트. `sanctuary`, `blind` 플래그 추가 (호환 변경).
+- v0 (2026-10-03, 1단계 실서버 반영, 호환 추가): `affect.changed`(독·뱀 물기), `items.cannot_drop`(저주받은 물건), `items.used.empty`(`It is empty.`) 추가.
+  `You are already following $M.` / `But you are already part of a group.` 는 실패가 아니라 이미 된 상태로 `group.change` 를 낸다. 1단계 마무리 시점의 v0 이다.

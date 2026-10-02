@@ -1,8 +1,8 @@
 """Runtime scenarios with the real world data and Vallen's real package stack (fake clock)."""
-import os
 from pathlib import Path
 
 import pytest
+from conftest import world_dir
 
 from anima.animus.queue import AnimusQueue, FakeProvider
 from anima.bus import Bus
@@ -12,7 +12,7 @@ from anima.runtime.agent import AgentRuntime
 from anima.sigil.program import Package, build_program, load_agent, load_package
 
 ROOT = Path(__file__).parents[1]
-WORLD = Path(os.environ.get("ANIMA_TBAMUD_WORLD", Path(__file__).parents[2] / "tbamud" / "lib" / "world"))
+WORLD = world_dir()
 pytestmark = pytest.mark.skipif(not WORLD.exists(), reason="tbaMUD world files not present")
 
 

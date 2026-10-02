@@ -18,6 +18,11 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--no-raw", action="store_true", help="raw 원문을 넣지 않음")
     r.add_argument("--top", type=int, default=40)
 
+    s = sub.add_parser("stats", help="녹화(.jsonl) 또는 tintin 로그들에서 킬·경험치·사망·도주·이탈 통계")
+    s.add_argument("paths", nargs="+", type=Path, help="Anima 녹화 하나, 또는 캐릭터별 tintin 로그 여러 개")
+    s.add_argument("--from", dest="since", type=float, help="녹화 시작 후 이 분부터")
+    s.add_argument("--minutes", type=float, help="이 길이(분)만")
+
     sg = sub.add_parser("sigil", help="Sigil 패키지 검사·설명")
     sgs = sg.add_subparsers(dest="sigil_cmd", required=True)
     ex = sgs.add_parser("explain", help="에이전트의 병합 결과와 각 항목이 온 레이어")
@@ -42,6 +47,8 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     if args.cmd == "replay":
         return _replay(args)
+    if args.cmd == "stats":
+        return _stats(args)
     if args.cmd == "sigil":
         return _sigil(args)
     if args.cmd in ("run", "start"):
@@ -200,6 +207,25 @@ def _sigil(args: argparse.Namespace) -> int:
             continue
         print(prog.explain() if args.sigil_cmd == "explain" else f"{name}: ok ({' → '.join(prog.layers)})")
     return 1 if bad else 0
+
+
+def _stats(args: argparse.Namespace) -> int:
+    from anima.stats import compute, game_clock, merge, render
+
+    if all(p.suffix == ".jsonl" for p in args.paths):
+        from anima.recorder import read_recording
+        events = [ev for p in args.paths for ev in read_recording(p)]
+        if events and (args.since or args.minutes):
+            t0 = min(ev.t for ev in events) + 60 * (args.since or 0)
+            t1 = t0 + 60 * args.minutes if args.minutes else float("inf")
+            events = [ev for ev in events if t0 <= ev.t < t1]
+        print(render(compute(events)))
+        return 0
+    from anima.adapters.tbamud_text.replay import replay_file
+    parts = [compute(game_clock(list(replay_file(p, keep_raw=False))), shared_clock=False)
+             for p in args.paths]
+    print(render(merge(parts)))
+    return 0
 
 
 def _replay(args: argparse.Namespace) -> int:
