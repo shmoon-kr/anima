@@ -111,10 +111,11 @@ class PartyBoard:
             self._move_on(f"zone {zone} is too dangerous")
         levels = tuple(sorted(self.levels()))
         if levels != self._levels:
+            first = not self._levels and len(levels) == len(self.roster)   # everyone's level known after login
             grew = bool(self._levels) and min(levels or (0,)) > min(self._levels)
             self._levels = levels
-            if grew:
-                self._move_on("we gained a level")
+            if grew or first:
+                self._move_on("we gained a level" if grew else "levels known")
 
     def _rally_zone(self) -> int | None:
         vs = self.memoria.graph.rooms_named(self.rally) if self.rally else []
