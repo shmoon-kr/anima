@@ -1,0 +1,224 @@
+"""Run several agents in one process (replaces mud-agents run.sh).
+
+One bus, one Memoria, one recorder, one Animus queue; per agent a Session and an AgentRuntime.
+A unix control socket serves `anima status`, `anima watch NAME` (with human input) and `anima stop`.
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import os
+import time
+import tomllib
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+from anima.animus.queue import AnimusQueue, FakeProvider
+from anima.bus import Bus
+from anima.memoria import Memoria
+from anima.protocol.commands import Source
+from anima.protocol.envelope import Event, Stamper
+from anima.recorder import Recorder
+from anima.runtime.agent import AgentRuntime
+from anima.session.session import Session
+from anima.sigil.program import SigilError, load_agent
+
+FAST_TICK_S = 0.1
+
+
+@dataclass
+class Config:
+    host: str
+    port: int
+    password: str
+    world_dir: Path
+    hazards: Path
+    agents_dir: Path = Path("agents")
+    packages_dir: Path = Path("packages")
+    recordings: Path = Path("recordings")
+    run_dir: Path = Path("run")
+
+    @classmethod
+    def load(cls, root: Path = Path(".")) -> "Config":
+        secret = tomllib.loads((root / "config" / "secret.toml").read_text())
+        local = {}
+        if (root / "config" / "anima.toml").exists():
+            local = tomllib.loads((root / "config" / "anima.toml").read_text())
+        paths = local.get("paths", {})
+        auth = secret["auth"]
+        password = auth.get("password", "")
+        if not password and auth.get("password_from_tintin"):
+            password = _tintin_pass((root / auth["password_from_tintin"]).expanduser())
+        if not password:
+            raise SystemExit("config/secret.toml: set auth.password or auth.password_from_tintin")
+        return cls(host=secret["server"]["host"], port=int(secret["server"]["port"]),
+                   password=password,
+                   world_dir=Path(os.environ.get("ANIMA_TBAMUD_WORLD")
+                                  or paths.get("world_dir", "../tbamud/lib/world")).expanduser(),
+                   hazards=root / paths.get("hazards", "third_party/tbamud/hazards.yaml"),
+                   agents_dir=root / "agents", packages_dir=root / "packages",
+                   recordings=root / "recordings", run_dir=root / "run")
+
+
+def _tintin_pass(path: Path) -> str:
+    """mud-agents secret.tin: `#var pass VALUE` (read only, never copied)."""
+    import re
+    for line in path.read_text(encoding="utf-8").splitlines():
+        m = re.match(r"\s*#var(?:iable)?\s+\{?pass\}?\s+\{?([^}\s]+)\}?", line)
+        if m:
+            return m.group(1)
+    return ""
+
+
+def default_answer(req) -> Any:          # phase 1: no LLM, every question gets its default (D16)
+    return req.default
+
+
+@dataclass
+class Supervisor:
+    cfg: Config
+    agents: list[str]
+    bus: Bus = field(default_factory=Bus)
+    sessions: dict[str, Session] = field(default_factory=dict)
+    runtimes: dict[str, AgentRuntime] = field(default_factory=dict)
+    _stamper: dict[str, Stamper] = field(default_factory=dict)
+    _tasks: list[asyncio.Task] = field(default_factory=list)
+    _stopping: asyncio.Event = field(default_factory=asyncio.Event)
+    _watchers: list[tuple[str, asyncio.Queue]] = field(default_factory=list)
+
+    def build(self) -> None:
+        self.memoria = Memoria.from_tbamud(self.cfg.world_dir, self.cfg.hazards)
+        self.memoria.attach(self.bus)
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        self.recorder = Recorder(self.cfg.recordings / f"{stamp}.jsonl", secrets=[self.cfg.password])
+        self.recorder.attach(self.bus)
+        self.animus = AnimusQueue(self.bus, {t: FakeProvider(default_answer, name="default")
+                                             for t in ("local_fast", "local_think", "claude")},
+                                  lambda a: self._stamper[a])
+        self.bus.subscribe(self._to_watchers)
+        programs = {n: load_agent(self.cfg.agents_dir / f"{n}.yaml", self.cfg.packages_dir) for n in self.agents}
+        from anima.party.blackboard import PartyBoard
+        first = programs[self.agents[0]].policies
+        self.party = PartyBoard.from_policies(self.memoria, first)
+        self.cfg.run_dir.mkdir(parents=True, exist_ok=True)
+        self.party.save_path = self.cfg.run_dir / "party.json"
+        self.party.load()
+        for name in self.agents:
+            prog = programs[name]
+            st = Stamper(name)
+            self._stamper[name] = st
+            sess = Session(name, self.cfg.host, self.cfg.port, self.cfg.password, self.bus, st)
+            rt = AgentRuntime(name, prog, self.memoria, self.bus, st, sess.send, time.monotonic,
+                              party=self.party, animus=self.animus)
+            self.party.register(name, rt.state)
+            rt.attach()
+            self.sessions[name], self.runtimes[name] = sess, rt
+
+    async def run(self) -> None:
+        self.build()
+        self.cfg.run_dir.mkdir(parents=True, exist_ok=True)
+        (self.cfg.run_dir / "anima.pid").write_text(str(os.getpid()))
+        server = await asyncio.start_unix_server(self._control, path=str(self.cfg.run_dir / "anima.sock"))
+        self._tasks.append(asyncio.create_task(self.animus.run()))
+        for i, name in enumerate(self.agents):
+            self._tasks.append(asyncio.create_task(self._start_later(name, i * 3.0)))
+            self._tasks.append(asyncio.create_task(self._tick_loop(name)))
+        try:
+            await self._stopping.wait()
+        finally:
+            for s in self.sessions.values():
+                await s.stop(quit_game=True)
+            for t in self._tasks:
+                t.cancel()
+            server.close()
+            self.recorder.close()
+            for f in ("anima.sock", "anima.pid"):
+                (self.cfg.run_dir / f).unlink(missing_ok=True)
+
+    async def _start_later(self, name: str, delay: float) -> None:
+        await asyncio.sleep(delay)                      # leader first, the others a few seconds apart
+        await self.sessions[name].run()
+
+    async def _tick_loop(self, name: str) -> None:
+        rt = self.runtimes[name]
+        last = 0.0
+        while True:
+            now = time.monotonic()
+            if now - last >= 1.0:
+                rt.tick()
+                last = now
+            else:
+                rt.tick_if_dirty()
+            self.animus.expire_due()
+            await asyncio.sleep(FAST_TICK_S)
+
+    def stop(self) -> None:
+        self._stopping.set()
+
+    # ------------------------------------------------------------ status / control
+    def status(self) -> dict[str, Any]:
+        out = {}
+        for name, rt in self.runtimes.items():
+            s, sess = rt.state, self.sessions[name]
+            loc = self.memoria.locator(name)
+            out[name] = {"connected": sess.connected, "in_game": s.in_game, "error": sess.error,
+                         "hp": s.hp, "hp_max": s.hp_max, "mp": s.mp, "mv": s.mv, "position": s.position,
+                         "room": s.room.get("name"), "vnum": loc.vnum, "behavior": rt.ctx.behavior,
+                         "task": rt.tasks.name, "scores": rt.selector.last_scores[:3]}
+        return out
+
+    def _to_watchers(self, ev: Event) -> None:
+        for agent, q in list(self._watchers):
+            if ev.agent == agent:
+                q.put_nowait(ev)
+
+    async def _control(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        try:
+            req = json.loads((await reader.readline()).decode() or "{}")
+            op = req.get("op")
+            if op == "status":
+                writer.write((json.dumps(self.status(), ensure_ascii=False) + "\n").encode())
+            elif op == "reload":
+                res = {}
+                for name, rt in self.runtimes.items():
+                    res[name] = rt.reload(lambda n=name: load_agent(self.cfg.agents_dir / f"{n}.yaml",
+                                                                    self.cfg.packages_dir))
+                writer.write((json.dumps(res) + "\n").encode())
+            elif op == "stop":
+                writer.write(b'{"ok": true}\n')
+                self.stop()
+            elif op == "send":
+                agent = req.get("agent")
+                if agent in self.sessions:
+                    self.sessions[agent].send(req.get("text", ""), Source("human", "watch", "typed by a person"),
+                                              priority=0)
+                    writer.write(b'{"ok": true}\n')
+            elif op == "watch":
+                await self._watch(req.get("agent", ""), reader, writer)
+            await writer.drain()
+        except (ConnectionError, json.JSONDecodeError):
+            pass
+        finally:
+            writer.close()
+
+    async def _watch(self, agent: str, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        q: asyncio.Queue[Event] = asyncio.Queue()
+        entry = (agent, q)
+        self._watchers.append(entry)
+
+        async def pump_in() -> None:                     # lines typed in `anima watch` → human commands
+            while line := await reader.readline():
+                text = line.decode().rstrip("\r\n")
+                if text and agent in self.sessions:
+                    self.sessions[agent].send(text, Source("human", "watch", "typed by a person"), priority=0)
+
+        inp = asyncio.create_task(pump_in())
+        try:
+            while not inp.done():
+                ev = await q.get()
+                writer.write((ev.to_json() + "\n").encode())
+                await writer.drain()
+        finally:
+            inp.cancel()
+            self._watchers.remove(entry)

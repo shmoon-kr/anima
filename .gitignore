@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Anima local files (never committed)
+config/secret*
+!config/secret.example.*
+config/anima.toml
+recordings/
+logs/
+run/

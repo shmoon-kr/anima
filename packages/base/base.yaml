@@ -1,0 +1,192 @@
+# 공통 몸: 생존, 먹고 마시기, 휴식, 사냥, 탐험, 연습 (docs/SPEC-from-tintin.md §2)
+sigil: 0
+package: base
+version: 0.1
+description: 모든 에이전트의 공통 행동. 직업·역할·파티 패키지가 이 위에 쌓인다.
+
+policies:
+  flee_pct: 30            # 체력 % 아래로 떨어지면 도망 (서버 wimpy 도 같은 기준, 최대 체력 1/3 상한)
+  rest_pct: 50            # 체력 % 아래면 쉼
+  rest_mp_pct: 0          # 마나 % 아래면 쉼
+  rest_mv: 20             # 이동력 아래면 쉼
+  rest_mv_pct: 40         # 이동력 % 아래면 쉼 (서서 기다리는 것보다 쉬는 게 회복이 빠르다)
+  hunt_min_hp: 60         # 이 체력 % 이상이면 사냥을 망설이지 않음
+  roam: true              # 목표가 없으면 덜 가본 곳으로 돌아다님
+  targets: []             # 사냥 대상 단어, 우선순위 순
+  shun: [cityguard, Peacekeeper, guildmaster]   # 이게 방에 있으면 싸움을 걸지 않음 (경비가 몹 편을 든다)
+  danger: [gelatinous]    # 들어오면 피하고, 싸우게 되면 바로 도망
+  guild_room: ""          # 직업 패키지가 정함
+  skill_plan: []          # [{skill, target(0~8), attack?}] 중요한 순서
+  reserve_for: {}         # {기술: 열리는 레벨}: 다음 레벨 핵심 기술을 위해 연습 2회를 남김
+  inertia: 0.1
+  inv_hard: 12            # 이보다 많이 들면 남는 장비를 버린다 (SPEC §2 장비와 물건)
+  inv_keep: [food, drinkcon, light, key]
+
+reflexes:
+  setup_on_enter:
+    on: connection.in_game
+    do:
+      - "ensure_toggle('autoloot', true)"
+      - "ensure_toggle('autogold', true)"
+      - "ensure_toggle('autosplit', true)"
+      - "send('score')"
+      - "send('practice')"
+      - "send('inventory')"
+      - "send('equipment')"
+      - "send('look')"           # 재접속(Reconnecting.)이면 서버가 방을 보여주지 않는다
+      - "mark('entered')"
+  keep_toggles_on:                    # 토글은 보낼 때마다 뒤집힌다: 꺼졌다는 응답이면 다시 켠다
+    on: toggle.state
+    if: "event.name in ['autoloot', 'autogold', 'autosplit'] and event.value == false"
+    do: ["ensure_toggle(event.name, true)"]
+  wimpy_follows_policy:
+    on: char.vitals_max
+    do: ["set_wimpy(self.hp_max * policy.flee_pct / 100)"]
+  flee_when_low:
+    on: prompt
+    if: "self.fighting and self.hp_pct < policy.flee_pct"
+    do: ["flee()"]
+    cooldown_s: 2
+  flee_from_danger:
+    on: combat.hit
+    if: "(event.victim == 'self' or event.attacker == 'self') and (any_contains([event.attacker], policy.danger) or any_contains([event.victim], policy.danger))"
+    do: ["flee()"]
+    cooldown_s: 2
+  wake_when_hit:
+    on: combat.hit
+    if: "event.victim == 'self' and self.position == 'sleeping'"
+    do: ["stand()"]
+  stand_when_woken:
+    on: position
+    if: "event.awakened_by != null"
+    do: ["stand()", "send('look')"]
+  avoid_danger_arriving:
+    on: occupant.arrived
+    if: "any_contains([event.who], policy.danger) and not self.fighting"
+    do: ["stand()", "go_back()"]
+    cooldown_s: 5
+  leave_zone_above_level:             # 경고가 뜨면 왔던 길을 한 걸음씩 되짚는다
+    on: zone.above_level
+    do: ["go_back()"]
+  refresh_room_when_target_missing:   # 우리가 아는 방 상태가 틀렸다: 다시 본다
+    on: command.refused
+    if: "event.reason == 'no_target'"
+    do: ["send('look')"]
+    cooldown_s: 5
+  open_closed_door:                   # "The gate seems to be closed." → 문을 연다 (잠겼으면 move.failed locked)
+    on: move.failed
+    if: "event.reason == 'closed' and event.door != null"
+    do: ["send('open ' + event.door)"]
+    cooldown_s: 10
+  refresh_inventory_when_item_missing:   # 주문 대상(물건)이 없다: 소지품 그림이 틀렸다
+    on: skill.result
+    if: "event.reason == 'no_target' and event.skill == null"
+    do: ["send('inventory')"]
+    cooldown_s: 20
+  refresh_room_when_skill_target_missing:  # "Backstab who?" 등: 방 그림이 틀렸다
+    on: skill.result
+    if: "event.reason == 'no_target' and event.skill != null"
+    do: ["mark('skill_target_missing')", "send('look')"]
+    cooldown_s: 5
+  give_refused:                       # "X seems to have her hands full." → 잠시 주지 않는다
+    on: items.give_failed
+    do: ["mark('give_failed')"]
+  inventory_every_2min:                # 만든 음식·받은 물건 등 소지품 그림이 낡지 않게
+    on: prompt
+    if: "self.position != 'sleeping'"
+    do: ["send('inventory')"]
+    cooldown_s: 120
+  no_mana:
+    on: skill.result
+    if: "event.reason == 'no_mana'"
+    do: ["mark('no_mana')"]
+
+behaviors:
+  orient:                             # 어디 있는지 모르면 (잠결에 look 이 거부됐을 때 등) 다시 본다
+    weight: 1.1
+    when: "self.position != 'sleeping' and not self.fighting"
+    considerations: ["bool(room.vnum == null and not room.dark)"]
+    do: ["send('look')"]
+    every_s: 5
+  recount_party:                      # 추정으로는 같이 있는데 목록에 없다: 방 목록이 낡았다
+    weight: 0.3
+    when: "not self.fighting and self.position != 'sleeping'"
+    considerations: ["step(party.unseen_here, 1)"]
+    do: ["send('look')"]
+    every_s: 15
+  eat:
+    weight: 1.0
+    considerations: ["bool(self.hungry)", "bool(has_item('food'))"]
+    do: ["stand()", "eat()"]
+    every_s: 5
+  drink:
+    weight: 1.0
+    considerations:
+      - "bool(self.thirsty)"
+      # 빈 물통("It is empty.")은 1분 동안 다시 마시지 않는다 (채우는 건 성직자·분수대)
+      - "bool((has_item('drinkcon') and secs_since('drink_empty') > 60) or room.has_fountain)"
+    do: ["stand()", "drink()"]
+    every_s: 5
+  rest:
+    weight: 0.9
+    when: "not self.fighting and self.secs_since_alert > 20"
+    considerations:
+      # 기준 아래로 떨어지면 쉬기 시작해 체력 90% 까지 쉰다 (히스테리시스)
+      - "max(max(inverse_linear(self.hp_pct, policy.rest_pct, 90), inverse_linear(self.mp_pct, policy.rest_mp_pct, 90)), max(max(below(self.mv, policy.rest_mv), below(self.mv_pct, policy.rest_mv_pct)), bool(self.behavior == 'rest' and (self.hp_pct < 90 or self.mv_pct < 60))))"
+    do: ["rest()"]
+    every_s: 10
+  sleep:                              # 잠은 회복 +50% (쉬기 +25%): 방이 안전할 때만
+    weight: 0.95
+    when: "not self.fighting and self.secs_since_alert > 20 and not room.dark and len(room.strangers) == 0"
+    considerations:
+      - "max(max(inverse_linear(self.hp_pct, policy.rest_pct, 90), inverse_linear(self.mp_pct, policy.rest_mp_pct, 90)), max(max(below(self.mv, policy.rest_mv), below(self.mv_pct, policy.rest_mv_pct)), bool(self.behavior == 'sleep' and (self.hp_pct < 90 or self.mv_pct < 60))))"
+    do: ["sleep()"]
+    every_s: 10
+  junk_surplus:
+    weight: 0.5
+    when: "not self.fighting and len(self.inventory) > policy.inv_hard"
+    considerations: ["bool(surplus_item(policy.inv_keep))"]
+    do: ["stand()", "send('junk ' + surplus_item(policy.inv_keep))", "send('inventory')"]
+    every_s: 4
+  stand_up:                           # 쉴 필요가 없어졌는데 앉거나 누워 있으면 일어난다 (리더는 쉬는 파티원을 기다린다)
+    weight: 0.15
+    when: "not self.fighting and self.position != 'standing'"
+    considerations: ["bool(self.hp_pct >= 90 and self.mv_pct >= 60 and self.mp_pct >= max(policy.rest_mp_pct, 50))"]
+    do: ["stand()"]
+    every_s: 5
+  hunt:
+    weight: 0.7
+    when: "not self.fighting and party.is_leader"
+    considerations:
+      - "bool(pick_target(policy.targets, policy.shun))"
+      - "linear(self.hp_pct, policy.flee_pct, policy.hunt_min_hp)"
+      - "bool(party.all_here)"
+    do: ["stand()", "attack(pick_target(policy.targets, policy.shun))"]
+  explore:
+    weight: 0.2
+    when: "not self.fighting and party.is_leader and policy.roam"
+    considerations: ["linear(self.hp_pct, policy.rest_pct, 90)"]
+    do: ["stand()", "explore()"]
+    every_s: 2
+  train:
+    weight: 0.6
+    when: "not self.fighting and policy.guild_room != '' and not room.dark"
+    considerations:
+      - "step(practices_spare(policy.reserve_for), 1)"
+      - "bool(next_skill(policy.skill_plan))"
+      - "linear(self.hp_pct, policy.rest_pct, 80)"
+    task: train_at_guild
+    retry_s: 3000
+
+tasks:
+  train_at_guild:
+    timeout_s: 900
+    steps:
+      - do: ["stand()"]
+      - go_to: "policy.guild_room"
+      - repeat:
+          do: ["practice(next_skill(policy.skill_plan))", "send('practice')"]
+          while: "practices_spare(policy.reserve_for) > 0 and next_skill(policy.skill_plan) != null"
+          max: 20
+          every_s: 3
+      - go_back: true

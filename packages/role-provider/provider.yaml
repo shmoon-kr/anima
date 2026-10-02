@@ -1,0 +1,30 @@
+# 보급 담당 성직자 (SPEC §3): 치료는 위급할 때만, 대신 음식. (물은 물통을 가진 성직자 누구나: class-cleric)
+sigil: 0
+package: role-provider
+policies:
+  heal_below_fight: 35
+  heal_below_idle: 60
+behaviors:
+  give_food:
+    weight: 0.95
+    when: "not self.fighting"
+    targets: "party.members_in_room"
+    considerations:
+      - "bool(target.hungry and not target.is_self and not target.has_food)"
+      - "step(secs_since('give_failed'), 120)"
+      - "bool(has_item('food'))"
+    do: ["stand()", "send('give ' + item_of('food') + ' ' + target.name)"]
+    every_s: 6
+  share_food:                         # 쌓인 음식은 음식이 없는 파티원에게 미리 나눈다
+    weight: 0.4
+    when: "not self.fighting and item_count('food') > 5"
+    targets: "party.members_in_room"
+    considerations: ["bool(not target.has_food and not target.is_self)", "step(secs_since('give_failed'), 120)"]
+    do: ["stand()", "send('give ' + item_of('food') + ' ' + target.name)"]
+    every_s: 5
+  make_food:
+    weight: 0.9
+    when: "not self.fighting and knows('create food')"
+    considerations: ["bool(len(party.hungry_in_room) > 0)", "bool(not has_item('food'))", "step(self.mp, 35)"]
+    do: ["stand()", "cast('create food')"]
+    every_s: 6

@@ -1,0 +1,9 @@
+# brain/Elysia.tin 의 정책값 (docs/SPEC-from-tintin.md §5)
+agent: Elysia
+layers: [base, class-cleric, party-midgaard, role-follower, role-provider]
+policies:
+  flee_pct: 45
+  rest_pct: 30
+  rest_mp_pct: 45
+  rest_mv: 15
+  roam: false

@@ -1,0 +1,27 @@
+# 미드가드 파티 (docs/SPEC-from-tintin.md §4-§5, brain/orders.md). 명단·역할 배정은 M7 에서 이 패키지에 더한다.
+sigil: 0
+package: party-midgaard
+policies:
+  targets: [newbie, quasit, crawler, monster, keeper, pet, thing, fido, janitor, odif, beggar, centipede, kobold, orc,
+            hobgoblin, snake, lion, warrior, wolf, warg, apprentice, student, broom, adventurer, woman, cook,
+            cockroach, butler, skeleton, zombie]
+  shun: [cityguard, Peacekeeper, guildmaster, Mayor, blob, gelatinous, mercenary, knight, templar, sorcerer, dragon,
+         golem, guardian]
+  danger: [blob, gelatinous, dragon, golem, guardian]
+  roster: [Vallen, Lil, Senia, Lumina, Elysia, Carmilla]
+  leader: Vallen
+  roles: {Vallen: [leader], Lumina: [healer], Elysia: [provider], Carmilla: [opener]}
+  classes: {Vallen: warrior, Senia: warrior, Lil: mage, Lumina: cleric, Elysia: cleric, Carmilla: thief}
+  fountain_room: "The Temple Square"
+  rally: "The Entrance To The Newbie Zone"
+  leash: 20
+  circuit: ["The Entrance To The Newbie Zone", "The End Of The Path"]
+behaviors:
+  hand_container_to_cleric:          # 물통은 성직자 손에 있어야 채워진다 (create water 는 자기 인벤토리만)
+    weight: 0.92
+    when: "not self.fighting and has_item('drinkcon') and not knows('create water')"
+    targets: "party.members_in_room"
+    considerations: ["bool(target.thirsty and target.class == 'cleric' and not target.has_drink and not target.is_self)",
+                     "step(secs_since('give_failed'), 120)"]
+    do: ["stand()", "send('give ' + item_of('drinkcon') + ' ' + target.name)"]
+    every_s: 10

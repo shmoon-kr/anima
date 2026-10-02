@@ -1,0 +1,27 @@
+# 마법사 (§3): 마나가 충분하면 배운 공격 주문 중 가장 센 것. 마나 부족 응답 뒤 30초는 쉬게 둠.
+sigil: 0
+package: class-mage
+policies:
+  guild_room: "The Mages' Laboratory"
+  attack_spells: [fireball, color spray, lightning bolt, shocking grasp, burning hands, chill touch, magic missile]
+  spell_min_mp: 25
+  skill_plan:
+    - {skill: fireball, target: 8, attack: true}
+    - {skill: color spray, target: 8, attack: true}
+    - {skill: lightning bolt, target: 8, attack: true}
+    - {skill: shocking grasp, target: 8, attack: true}
+    - {skill: burning hands, target: 8, attack: true}
+    - {skill: chill touch, target: 8, attack: true}
+    - {skill: magic missile, target: 8, attack: true}
+    - {skill: armor, target: 3}
+  reserve_for: {chill touch: 3, burning hands: 5}
+behaviors:
+  fight_spell:
+    weight: 0.95
+    when: "self.fighting"
+    considerations:
+      - "step(self.mp, policy.spell_min_mp)"
+      - "step(secs_since('no_mana'), 30)"
+      - "bool(first_known(policy.attack_spells))"
+    do: ["cast(first_known(policy.attack_spells))"]
+    every_s: 3

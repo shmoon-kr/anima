@@ -1,0 +1,10 @@
+# 기습 담당 도적 (SPEC §4): 리더와 같은 방에서 사냥 대상이 보이면 backstab 으로 싸움을 연다.
+sigil: 0
+package: role-opener
+behaviors:
+  open_fight:
+    weight: 0.9
+    when: "not self.fighting and not party.is_leader and party.with_leader and knows('backstab') and step(secs_since('backstab_failed'), 60) and step(secs_since('skill_target_missing'), 10)"
+    considerations: ["bool(pick_target(policy.targets, policy.shun))", "bool(party.all_here)"]
+    do: ["stand()", "use('backstab', pick_target(policy.targets, policy.shun))"]
+    every_s: 5

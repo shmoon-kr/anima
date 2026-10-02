@@ -1,0 +1,9 @@
+# brain/Carmilla.tin 의 정책값 (docs/SPEC-from-tintin.md §5)
+agent: Carmilla
+layers: [base, class-thief, party-midgaard, role-follower, role-opener]
+policies:
+  flee_pct: 40
+  rest_pct: 30
+  rest_mp_pct: 20
+  rest_mv: 15
+  roam: false

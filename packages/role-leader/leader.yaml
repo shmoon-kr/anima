@@ -1,0 +1,66 @@
+# 리더 (SPEC §4): 그룹을 만들고, 모두 모였을 때만 사냥·탐험하고, 거점 지역에 머문다.
+sigil: 0
+package: role-leader
+behaviors:
+  form_group:
+    weight: 1.0
+    when: "party.is_leader and not party.in_group and party.online > 1 and not self.fighting"
+    considerations: ["1"]
+    do: ["stand()", "send('group new')", "ensure_toggle('autoassist', true)"]
+    every_s: 10
+  hunt:                                # 도적이 없을 때: 바로 공격
+    when: "not self.fighting and party.is_leader and member_with_role('opener') == null"
+    considerations:
+      - "bool(pick_target(policy.targets, policy.shun))"
+      - "linear(self.hp_pct, policy.flee_pct, policy.hunt_min_hp)"
+      - "bool(party.all_here)"
+      - "bool(not party.resting)"      # 누가 쉬는 중이면 기다린다
+  hunt_after_opener:                   # 도적이 같은 방에 있으면 backstab 으로 열 시간을 준다
+    weight: 0.7
+    when: "not self.fighting and party.is_leader and member_with_role('opener') != null"
+    considerations:
+      - "bool(pick_target(policy.targets, policy.shun))"
+      - "linear(self.hp_pct, policy.flee_pct, policy.hunt_min_hp)"
+      - "bool(party.all_here)"
+      - "bool(not party.resting)"
+    do: ["stand()", "attack(pick_target(policy.targets, policy.shun))"]
+    delay_s: 4
+  explore:
+    considerations:
+      - "linear(self.hp_pct, policy.rest_pct, 90)"
+      - "linear(party.min_mv_pct, 30, 50)"     # 이동력이 바닥난 파티원을 끌고 다니지 않는다
+      - "bool(party.all_following)"            # 모두 따라붙은 뒤에 움직인다 (안 그러면 도착하자마자 떠난다)
+      - "bool(party.all_here)"
+      - "bool(not party.resting)"
+  go_home:                             # 거점 지역 밖이면 돌아간다 (모두 모였을 때)
+    weight: 0.65
+    when: "not self.fighting and party.is_leader and party.rally != null and not in_zone_of(party.rally)"
+    considerations: ["bool(party.all_here)", "bool(not party.resting)"]
+    do: ["stand()", "go_to(party.rally)"]
+    every_s: 1
+  move_hunting_ground:                 # 거점 지역에서 5분 넘게 킬이 없으면 순환 목록의 다음 거점으로 (리젠 대기)
+    weight: 0.66
+    when: "not self.fighting and party.is_leader and party.rally != null and in_zone_of(party.rally)"
+    considerations:
+      - "step(self.secs_since_kill, 300)"
+      - "step(secs_since('entered'), 300)"
+      - "step(secs_since('rally_changed'), 600)"
+      - "bool(party.all_here)"
+    do: ["next_rally()", "mark('rally_changed')"]
+    every_s: 30
+  give_up_unreachable_ground:          # 새 거점으로 가는 길이 막혔으면 (밤에 잠긴 성문 등) 1분 뒤 이전 거점으로 되돌린다
+    weight: 0.7
+    when: "not self.fighting and party.is_leader and party.rally != null and not in_zone_of(party.rally)"
+    considerations:
+      - "bool(path_len(party.rally) == null and room.vnum != null)"
+      - "step(secs_since('rally_changed'), 60)"
+    do: ["next_rally()", "mark('rally_changed')"]
+    every_s: 30
+  drink_at_fountain:                   # 물통도 보급 담당도 없으면 분수대로 (따라오는 파티원도 거기서 마신다)
+    weight: 0.75
+    when: "not self.fighting and party.is_leader and policy.fountain_room != ''"
+    considerations:
+      - "bool(self.thirsty and not has_item('drinkcon'))"
+      - "bool(member_with_role('provider') == null)"
+    do: ["stand()", "go_to(policy.fountain_room)", "drink()"]
+    every_s: 1

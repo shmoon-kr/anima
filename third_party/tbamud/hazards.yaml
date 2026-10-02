@@ -1,0 +1,19 @@
+# tbaMUD 2025 stock world: hazards learned in mud-agents (docs/SPEC-from-tintin.md §1 위험).
+# World knowledge, not engine code (D12). Loaded by anima.memoria.graph.Hazards.from_yaml.
+
+# Exits never to take, by room vnum and direction.
+trap_exits:
+  - {room: 2511, dir: north, why: "High Tower entrance: the trail back disappears behind you, locked door and strong guard"}
+
+# Exits never to take, by room name (several rooms share a name; all of them).
+bad_exits:
+  - {room_name: "The Road Crossing", dir: up, why: "chain up to the Abyss; fell to its bottom"}
+  - {room_name: "The Dump", dir: down, why: "lightless sewer maze"}
+  - {room_name: "The Tournament And Practice Yard", dir: down, why: "well into the sewers"}
+  - {room_name: "The Secret Yard", dir: down, why: "sewers"}
+  - {room_name: "The Clerics' Inner Sanctum", dir: down, why: "sewers"}
+
+# Rooms that kill or trap whoever enters, by name (in addition to death-flag and no-exit rooms).
+deadly_rooms:
+  - "Mid-Air"
+  - "The Free Fall From The Chain"

@@ -1,0 +1,3 @@
+# 복사해서 config/anima.toml 로 (gitignore). 환경 변수 ANIMA_TBAMUD_WORLD 가 있으면 그게 우선.
+[paths]
+world_dir = "../tbamud/lib/world"        # 로컬 tbaMUD 설치의 세계 파일 (저장소에 넣지 않는다)

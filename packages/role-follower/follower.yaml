@@ -1,0 +1,27 @@
+# 따라가는 파티원 (SPEC §4): 리더에게 가서 follow + group join, 떨어지면 리더 방으로 간다.
+sigil: 0
+package: role-follower
+reflexes:
+  assist_on_join:
+    on: group.change
+    if: "event.event == 'joined' and event.who == self.name"
+    do: ["ensure_toggle('autoassist', true)"]
+behaviors:
+  go_to_leader:                        # 쉬더라도 리더 곁에서 쉰다 (리더는 쉬는 파티원을 기다린다)
+    weight: 1.1
+    when: "not party.is_leader and not party.with_leader and party.leader_vnum != null and not self.fighting"
+    considerations: ["step(self.mv, 10)"]
+    do: ["stand()", "go_to(party.leader_vnum)"]
+    every_s: 1
+  join_leader:                        # 따라가기가 먼저: 안 그러면 리더가 떠날 때마다 한 방씩 뒤처진다
+    weight: 1.2
+    when: "not party.is_leader and party.with_leader and not self.fighting"
+    considerations: ["bool(not party.following or not party.in_group)"]
+    do: ["stand()", "send('follow ' + party.leader)", "send('group join ' + party.leader)"]
+    every_s: 6
+  return_empty_container:               # 빈 물통은 보급 담당에게 (채워서 돌려준다)
+    weight: 0.9
+    when: "not self.fighting and has_item('drinkcon') and (member_with_role('provider') != null or member_with_role('healer') != null)"
+    considerations: ["below(secs_since('drink_empty'), 120)"]
+    do: ["stand()", "send('give ' + item_of('drinkcon') + ' ' + if_else(member_with_role('provider') != null, member_with_role('provider'), member_with_role('healer')))", "mark('drink_empty_done')"]
+    every_s: 10

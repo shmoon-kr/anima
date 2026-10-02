@@ -1,0 +1,9 @@
+# brain/Vallen.tin 의 정책값 (docs/SPEC-from-tintin.md §5)
+agent: Vallen
+layers: [base, class-warrior, party-midgaard, role-leader]
+policies:
+  flee_pct: 45
+  rest_pct: 30
+  rest_mp_pct: 0
+  rest_mv: 25
+  roam: true

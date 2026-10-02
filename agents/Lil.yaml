@@ -1,0 +1,9 @@
+# brain/Lil.tin 의 정책값 (docs/SPEC-from-tintin.md §5)
+agent: Lil
+layers: [base, class-mage, party-midgaard, role-follower]
+policies:
+  flee_pct: 45
+  rest_pct: 30
+  rest_mp_pct: 35
+  rest_mv: 15
+  roam: false

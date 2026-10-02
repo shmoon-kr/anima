@@ -1,0 +1,25 @@
+# 전사 (docs/SPEC-from-tintin.md §3). 구조(rescue)는 파티 역할 패키지(M7).
+sigil: 0
+package: class-warrior
+policies:
+  guild_room: "The Tournament And Practice Yard"
+  skill_plan:
+    - {skill: kick, target: 6}
+    - {skill: rescue, target: 6}
+    - {skill: bash, target: 6}
+    - {skill: bandage, target: 1}
+  reserve_for: {rescue: 3, bash: 12}
+behaviors:
+  fight_skill:
+    weight: 0.95
+    when: "self.fighting"
+    considerations: ["bool(first_known(['bash', 'kick']))"]
+    do: ["use(first_known(['bash', 'kick']))"]
+    every_s: 3
+  rescue:                              # 약한 직업 파티원이 맞으면 구조 (전사끼리는 안 함)
+    weight: 0.97
+    when: "self.fighting and knows('rescue')"
+    targets: "party.members_in_room"
+    considerations: ["bool(target.being_hit and not target.is_self and target.class != 'warrior')"]
+    do: ["use('rescue', target.name)"]
+    every_s: 4

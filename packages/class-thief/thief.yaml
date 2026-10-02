@@ -1,0 +1,23 @@
+# 도적 (§3): backstab 은 싸움을 여는 한 방 전용 (이미 싸우는 상대에겐 안 됨). 리더가 시킬 때는 역할 패키지(M7).
+sigil: 0
+package: class-thief
+policies:
+  guild_room: "The Secret Yard"
+  skill_plan:
+    - {skill: backstab, target: 7}
+    - {skill: hide, target: 1}
+  reserve_for: {backstab: 3}
+behaviors:
+  hunt_backstab:                     # 혼자이거나 리더일 때: 사냥을 backstab 으로 연다
+    weight: 0.75
+    when: "not self.fighting and party.is_leader and step(secs_since('backstab_failed'), 60)"
+    considerations:
+      - "bool(pick_target(policy.targets, policy.shun))"
+      - "bool(knows('backstab'))"
+      - "linear(self.hp_pct, policy.flee_pct, policy.hunt_min_hp)"
+    do: ["stand()", "use('backstab', pick_target(policy.targets, policy.shun))"]
+reflexes:
+  backstab_unusable:
+    on: skill.result
+    if: "event.skill == 'backstab' and event.reason in ['need_weapon', 'wrong_weapon', 'unknown_skill']"
+    do: ["mark('backstab_failed')"]

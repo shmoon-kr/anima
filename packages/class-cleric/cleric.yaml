@@ -1,0 +1,69 @@
+# 성직자 (§3). 혼자일 때: 치료(55/80), 음식 만들기. 둘이 역할을 나누는 건 역할 패키지(M7)가 기준을 덮어쓴다.
+sigil: 0
+package: class-cleric
+policies:
+  guild_room: "The Clerics' Inner Sanctum"
+  heal_below_fight: 55
+  heal_below_idle: 80
+  skill_plan:
+    - {skill: cure light, target: 8}
+    - {skill: create food, target: 3}
+    - {skill: create water, target: 3}
+    - {skill: armor, target: 3}
+    - {skill: cure critic, target: 8}
+    - {skill: bless, target: 3}
+    - {skill: group armor, target: 3}
+    - {skill: word of recall, target: 3}
+    - {skill: heal, target: 8}
+    - {skill: sanctuary, target: 8}
+    - {skill: remove poison, target: 1}
+  reserve_for: {cure critic: 9, word of recall: 12, sanctuary: 15}
+behaviors:
+  heal_fight:
+    weight: 1.0
+    when: "self.fighting and step(secs_since('no_mana'), 30)"
+    targets: "party.members_in_room"
+    considerations:
+      - "below(target.hp_pct, policy.heal_below_fight)"
+      - "inverse_linear(target.hp_pct, 0, 100)"
+      - "step(self.mp, 30)"
+    do: ["cast(if_else(self.mp >= 60 and knows('heal'), 'heal', if_else(knows('cure critic'), 'cure critic', 'cure light')), target.name)"]
+    every_s: 3
+  heal_idle:
+    weight: 0.85
+    when: "not self.fighting and step(secs_since('no_mana'), 30)"
+    targets: "party.members_in_room"
+    considerations:
+      - "below(target.hp_pct, policy.heal_below_idle)"
+      - "inverse_linear(target.hp_pct, 0, 100)"
+      - "step(self.mp, 30)"
+    do: ["stand()", "cast(if_else(self.mp >= 60 and knows('heal'), 'heal', if_else(knows('cure critic'), 'cure critic', 'cure light')), target.name)"]
+    every_s: 4
+  create_food:
+    weight: 1.0
+    when: "not self.fighting"
+    considerations:
+      - "bool(self.hungry)"
+      - "bool(not has_item('food'))"
+      - "bool(knows('create food'))"
+      - "step(self.mp, 35)"
+    do: ["stand()", "cast('create food')"]
+    every_s: 6
+  # 물: create water 는 자기 인벤토리의 물통에만 된다 (spell_parser.c:781 TAR_OBJ_INV). 물통을 가진 성직자가 채워서 준다.
+  give_water:
+    weight: 0.95
+    when: "not self.fighting and knows('create water')"
+    targets: "party.members_in_room"
+    considerations:
+      - "bool(target.thirsty and not target.is_self and not target.has_drink)"
+      - "step(secs_since('give_failed'), 120)"
+      - "bool(has_item('drinkcon'))"
+      - "step(self.mp, 30)"
+    do: ["stand()", "cast('create water', item_of('drinkcon'))", "send('give ' + item_of('drinkcon') + ' ' + target.name)"]
+    every_s: 8
+  water_myself:
+    weight: 1.05
+    when: "not self.fighting and knows('create water')"
+    considerations: ["bool(self.thirsty)", "bool(has_item('drinkcon'))", "step(self.mp, 30)"]
+    do: ["stand()", "cast('create water', item_of('drinkcon'))", "drink()"]
+    every_s: 8
