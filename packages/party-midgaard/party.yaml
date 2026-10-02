@@ -39,7 +39,7 @@ behaviors:
     every_s: 10
   camp_rest:                          # 방이 안전하지 않으면 자지 말고 쉬기만
     weight: 0.88
-    when: "party.camping and not party.is_sentry and not self.fighting and self.secs_since_alert > 20"
+    when: "party.camping and not party.is_sentry and not self.fighting and self.secs_since_alert > 20 and (room.dark or len(room.strangers) > 0)"
     considerations: ["bool(party.camping)"]
     do: ["rest()"]
     every_s: 10

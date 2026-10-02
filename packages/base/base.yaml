@@ -156,7 +156,8 @@ behaviors:
   rest:
     weight: 0.9
     camp: true                        # 이 필요가 파티 야영을 시작·유지한다 (D30)
-    when: "not self.fighting and self.secs_since_alert > 20"
+    # 잘 수 있으면 자는 게 낫다(회복 +50%): 쉬기는 잘 수 없을 때만. 안 그러면 관성 때문에 쉬다가 영영 안 잔다
+    when: "not self.fighting and self.secs_since_alert > 20 and (room.dark or len(room.strangers) > 0 or party.is_sentry)"
     considerations:
       # 기준 아래로 떨어지면 쉬기 시작해 체력 90% 까지 쉰다 (히스테리시스)
       - "max(max(inverse_linear(self.hp_pct, policy.rest_pct, 90), inverse_linear(self.mp_pct, policy.rest_mp_pct, 90)), max(max(below(self.mv, policy.rest_mv), below(self.mv_pct, policy.rest_mv_pct)), bool(self.behavior == 'rest' and (self.hp_pct < 90 or self.mv_pct < 60))))"
