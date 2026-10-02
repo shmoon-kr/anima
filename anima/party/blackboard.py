@@ -69,12 +69,16 @@ class PartyBoard:
         """With a ladder, the circuit is the best fitting zones for our levels now. True if it changed."""
         if self.ladder is None or self.clock() < self.override_until:
             return False
-        lights = [self.states[n].has_light for n in self.online()]
-        new = self.ladder.circuit(self.levels(), has_light=bool(lights) and all(lights), size=3, span=self.mean_span())
+        new = self.ladder.circuit(self.levels(), has_light=self._leader_lit(), size=3, span=self.mean_span())
         if new and new != self.circuit:
             self.circuit = new
             return True
         return False
+
+    def _leader_lit(self) -> bool:
+        """Followers walk where the leader walks (the server moves them), so the leader's light decides."""
+        st = self.states.get(self.leader)
+        return bool(st and st.has_light)
 
     def span(self, name: str) -> int | None:
         st = self.states.get(name)
@@ -269,8 +273,7 @@ class PartyBoard:
             return here
         if here is None:
             return left[0]
-        lights = [self.states[n].has_light for n in self.online()]
-        cond = self.memoria.conditions(has_light=bool(lights) and all(lights))
+        cond = self.memoria.conditions(has_light=self._leader_lit())
 
         def steps(v: int) -> int:
             p = self.memoria.graph.path(here, v, cond, max_rooms=4000)
