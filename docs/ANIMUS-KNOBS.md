@@ -16,6 +16,8 @@ Key format for patches: `policy.NAME`, `weight.BEHAVIOR`.
 | `policy.circuit` | rooms | ≤ 4 entries | party | party-midgaard | 2 entries | all |
 | `policy.danger` | words | ≤ 40 entries | party or agent, grow only | base | 5 entries | all |
 | `policy.flee_pct` | number | 15..50, step ≤ 10 | party or agent | base | 40 / 45 | all |
+| `policy.food_min` | number | 0..6, step ≤ 2 | party or agent | base | 2 | all |
+| `policy.gold_reserve` | number | 0..5000, step ≤ 1000 | party or agent | base | 100 | all |
 | `policy.hunt_min_hp` | number | 30..95, step ≤ 15 | party or agent | base | 60 | all |
 | `policy.inv_keep` | words | ≤ 8 entries | party or agent, grow only | base | 4 entries | all |
 | `policy.leash` | number | 5..40, step ≤ 10 | party | party-midgaard | 20 | all |
@@ -24,9 +26,11 @@ Key format for patches: `policy.NAME`, `weight.BEHAVIOR`.
 | `policy.rest_mv` | number | 5..60, step ≤ 15 | party or agent | base | 15 / 25 | all |
 | `policy.rest_mv_pct` | number | 10..70, step ≤ 15 | party or agent | base | 40 | all |
 | `policy.rest_pct` | number | 20..70, step ≤ 15 | party or agent | base | 30 | all |
+| `policy.sell_at` | number | 2..14, step ≤ 4 | party or agent | base | 6 | all |
 | `policy.shun` | words | ≤ 40 entries | party or agent, grow only | base | 13 entries | all |
 | `policy.skill_plan` | plan | ≤ 20 entries | party or agent | base | 11 entries / 2 entries / 4 entries / 8 entries | all |
 | `policy.targets` | words | ≤ 40 entries | party or agent | base | 30 entries | all |
+| `policy.trip_cooldown_s` | number | 600..3600, step ≤ 600 | party | party-midgaard | 1200 | all |
 
 ## Behavior weights (opt-in, efficiency behaviors only)
 

@@ -2,6 +2,19 @@
 sigil: 0
 package: role-leader
 behaviors:
+  # 장보기 (D32): 팔 것이 쌓였거나 살 것이 있으면 파티를 데리고 상점들을 돌고 거점으로 돌아온다
+  start_shopping_trip:
+    weight: 0.72
+    when: "not self.fighting and party.trip_wanted and not party.camping"
+    considerations: ["bool(party.all_here)", "bool(party.all_following)", "bool(not party.resting)"]
+    do: ["start_trip()"]
+    every_s: 30
+  shopping_trip:
+    weight: 0.8
+    when: "not self.fighting and party.trip_stop != null and not party.camping"
+    considerations: ["bool(party.all_here)", "bool(not party.resting)"]
+    do: ["stand()", "go_to(party.trip_stop)", "trip_progress()"]
+    every_s: 1
   form_group:
     weight: 1.0
     when: "party.is_leader and not party.in_group and party.online > 1 and not self.fighting"

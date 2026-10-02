@@ -2,6 +2,7 @@
 sigil: 0
 package: class-cleric
 policies:
+  gear_avoid: [anti_neutral, anti_cleric]   # D32: 이 표시가 있는 물건은 못 쓴다
   guild_room: "The Clerics' Inner Sanctum"
   heal_below_fight: 55
   heal_below_idle: 80

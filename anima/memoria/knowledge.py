@@ -75,9 +75,13 @@ class Knowledge:
 
     def item(self, text: str) -> Obj | None:
         """An inventory / equipment line ('a danish pastry', 'a candle (glowing)') → object."""
-        t = re.sub(r"\s*(\([^)]*\)|\.\.[^.]*)\s*$", "", text).strip()
-        objs = self._obj_by_short.get(_key(t))
+        objs = self.items(text)
         return objs[0] if objs else None
+
+    def items(self, text: str) -> list[Obj]:
+        """Every object with that short description (many share one, e.g. twelve 'a long sword')."""
+        t = re.sub(r"\s*(\([^)]*\)|\.\.[^.]*)\s*$", "", text).strip()
+        return list(self._obj_by_short.get(_key(t), []))
 
     def ground_item(self, long_text: str) -> Obj | None:
         """A room object line (long description) → object."""

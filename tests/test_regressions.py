@@ -107,15 +107,15 @@ def test_surplus_is_junked_but_a_cursed_item_is_skipped(memoria_proto):
     h = Harness(memoria_proto)
     enter_game(h)
     h.ev("items.inventory", items=[{"text": "a yellow and green ring", "count": 1},
-                                   {"text": "some cool newbie leggings", "count": 1},
-                                   {"text": "a waybread", "count": 12}])
+                                   {"text": "a scroll of recall", "count": 1},
+                                   {"text": "a waybread", "count": 16}])            # over inv_hard (16)
     h.take()
     h.advance(1)
     first = [t for t in h.take() if t.startswith("junk")]
     assert first == ["junk ring"]
     h.ev("items.cannot_drop", text="a yellow and green ring", reason="cursed")
     h.advance(5)
-    assert [t for t in h.texts() if t.startswith("junk")] == ["junk leggings"]
+    assert [t for t in h.texts() if t.startswith("junk")] == ["junk recall"]
 
 
 def test_missing_skill_target_refreshes_the_room(memoria_proto):

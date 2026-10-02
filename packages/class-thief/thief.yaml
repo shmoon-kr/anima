@@ -2,6 +2,8 @@
 sigil: 0
 package: class-thief
 policies:
+  gear_avoid: [anti_neutral, anti_thief]   # D32: 이 표시가 있는 물건은 못 쓴다
+  weapon_kinds: [pierce]           # backstab 은 찌르는 무기만 (act.offensive.c:152)
   guild_room: "The Secret Yard"
   skill_plan:
     - {skill: backstab, target: 7}

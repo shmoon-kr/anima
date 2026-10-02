@@ -2,6 +2,7 @@
 sigil: 0
 package: class-mage
 policies:
+  gear_avoid: [anti_neutral, anti_mage]   # D32: 이 표시가 있는 물건은 못 쓴다
   guild_room: "The Mages' Laboratory"
   attack_spells: [fireball, color spray, lightning bolt, shocking grasp, burning hands, chill touch, magic missile]
   spell_min_mp: 25

@@ -106,6 +106,10 @@ class Supervisor:
         self.party = PartyBoard.from_policies(self.memoria, first)
         self.cfg.run_dir.mkdir(parents=True, exist_ok=True)
         self.party.save_path = self.cfg.run_dir / "party.json"
+        if first.get("zone_ladder"):
+            from anima.party.ladder import Ladder
+            self.party.ladder = Ladder(self.memoria, hub=lambda: self.memoria.locator(self.party.leader).vnum,
+                                       clock=time.time)
         self.party.load()
         for name in self.agents:
             prog = programs[name]
@@ -117,6 +121,7 @@ class Supervisor:
             self.party.register(name, rt.state)
             rt.attach()
             self.sessions[name], self.runtimes[name] = sess, rt
+        self.bus.subscribe(self.party.on_event)
         self._base = {n: self._load(n) for n in self.agents}       # separate objects: hot-apply mutates the runtime's
         self.overlay = Overlay(
             self.agents, base=lambda n: self._base[n], rebuild=self._load,
@@ -189,8 +194,14 @@ class Supervisor:
                              "room": s.room.get("name"), "zone": self._zone(vnum), "gold": s.gold,
                              "hungry": s.hungry, "thirsty": s.thirsty, "behavior": rt.ctx.behavior,
                              "task": rt.tasks.name}
-        return {"leader": self.party.leader, "rally": self.party.rally, "circuit": self.party.circuit,
-                "members": members}
+        out = {"leader": self.party.leader, "rally": self.party.rally, "circuit": self.party.circuit,
+               "members": members}
+        lad = self.party.ladder
+        if lad is not None:
+            lv = self.party.levels()
+            out["zone_ladder"] = {"fitting_zones": [vars(f) for f in lad.candidates(lv)[:6]],
+                                  "too_dangerous_for_now": lad.blocked(min(lv or [0]))}
+        return out
 
     def _knob_table(self) -> dict[str, Any]:
         out: dict[str, Any] = {}
@@ -236,6 +247,8 @@ class Supervisor:
         return load_agent(self.cfg.agents_dir / f"{name}.yaml", self.cfg.packages_dir, extra)
 
     def _apply_party(self, key: str, value: Any) -> None:
+        if key in ("rally", "circuit"):                 # the strategist's choice holds before the ladder picks again
+            self.party.override_until = self.party.clock() + 1800
         if key == "rally":
             self.party.rally = value
             self.party.save()

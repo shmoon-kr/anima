@@ -3,14 +3,16 @@
 File formats as read by tbaMUD db.c (parse_room, parse_mobile, load_zones). Flag numbers from
 structs.h: ROOM_DARK 0, ROOM_DEATH 1, ROOM_INDOORS 3; sectors 0 inside, 1 city, 7 water-noswim,
 8 flying, 9 underwater; MOB_SENTINEL 1, MOB_AGGRESSIVE 5, MOB_WIMPY 7, MOB_AGGR_EVIL 8,
-MOB_AGGR_GOOD 9, MOB_AGGR_NEUTRAL 10, MOB_MEMORY 11, MOB_HELPER 12.
+MOB_AGGR_GOOD 9, MOB_AGGR_NEUTRAL 10, MOB_MEMORY 11, MOB_HELPER 12. Objects (db.c parse_object):
+ITEM_WEAR_* 0..14, extra ITEM_* (MAGIC 6, NODROP 7, ANTI_* 9..15, NOSELL 16), APPLY_* locations.
+Shops (shop.c boot_the_shops, "v3.0" format) and zone resets (db.c load_zones: M, E, G, O).
 """
 from __future__ import annotations
 
 import re
 from pathlib import Path
 
-from anima.memoria.model import DIRS, ITEM_TYPES, Exit, Mob, Obj, Room, World, Zone
+from anima.memoria.model import DIRS, ITEM_TYPES, Exit, Mob, Obj, Room, Shop, World, Zone
 
 ROOM_DARK, ROOM_DEATH, ROOM_INDOORS = 0, 1, 3
 SECT_INSIDE, SECT_CITY = 0, 1
@@ -18,6 +20,24 @@ IMPASSABLE_SECTORS = {7, 8, 9}
 MOB_BITS = {1: "sentinel", 5: "aggressive", 7: "wimpy", 8: "aggr_evil", 9: "aggr_good", 10: "aggr_neutral",
             11: "memory", 12: "helper"}
 _HASH = re.compile(r"#(\d+)")
+WEAR_BITS = ["take", "finger", "neck", "body", "head", "legs", "feet", "hands", "arms", "shield", "about",
+             "waist", "wrist", "wield", "hold"]                                     # structs.h ITEM_WEAR_*
+EXTRA_BITS = {0: "glow", 1: "hum", 2: "norent", 3: "nodonate", 4: "noinvis", 5: "invisible", 6: "magic",
+              7: "nodrop", 8: "bless", 9: "anti_good", 10: "anti_evil", 11: "anti_neutral", 12: "anti_mage",
+              13: "anti_cleric", 14: "anti_thief", 15: "anti_warrior", 16: "nosell", 17: "quest_item"}
+APPLY = {1: "str", 2: "dex", 3: "int", 4: "wis", 5: "con", 6: "cha", 12: "mana", 13: "hit", 14: "move",
+         17: "ac", 18: "hitroll", 19: "damroll", 20: "save_para", 21: "save_rod", 22: "save_petri",
+         23: "save_breath", 24: "save_spell"}                                       # structs.h APPLY_*
+ITEM_TYPE_NAMES = ["undefined", "light", "scroll", "wand", "staff", "weapon", "furniture", "free", "treasure",
+                   "armor", "potion", "worn", "other", "trash", "free2", "container", "note", "drinkcon", "key",
+                   "food", "money", "pen", "boat", "fountain"]                      # constants.c item_types
+
+
+def _bits(tok: str, names) -> set[str]:
+    v = flag_value(tok)
+    if isinstance(names, dict):
+        return {n for b, n in names.items() if v & (1 << b)}
+    return {n for b, n in enumerate(names) if v & (1 << b)}
 
 
 def flag_value(tok: str) -> int:
@@ -130,7 +150,8 @@ def parse_mob(path: Path) -> dict[int, Mob]:
 
 
 def parse_obj(path: Path) -> dict[int, Obj]:
-    """db.c parse_object: keywords~ short~ long~ action~ then 'type extra... wear...' line."""
+    """db.c parse_object: keywords~ short~ long~ action~, then
+    `type extra[4] wear[4] perm[4]`, `v0 v1 v2 v3`, `weight cost rent level timer`, then E/A/T blocks."""
     lines = _lines(path)
     out: dict[int, Obj] = {}
     i = 0
@@ -145,10 +166,101 @@ def parse_obj(path: Path) -> dict[int, Obj]:
         long_, i = _read_tilde(lines, i)
         _, i = _read_tilde(lines, i)
         head = lines[i].split() if i < len(lines) else []
-        i += 1
+        nums = lines[i + 1].split() if i + 1 < len(lines) else []
+        more = lines[i + 2].split() if i + 2 < len(lines) else []
+        i += 3
         t = int(head[0]) if head and head[0].lstrip("-").isdigit() else 0
+        extra = _bits(head[1], EXTRA_BITS) if len(head) >= 13 else set()
+        wear = _bits(head[5], WEAR_BITS) if len(head) >= 13 else set()
+        vals = [int(x) for x in nums[:4] if x.lstrip("-").isdigit()] + [0, 0, 0, 0]
+        num = [int(x) for x in more[:5] if x.lstrip("-").isdigit()] + [0, 0, 0, 0, 0]
+        affects: list[tuple[str, int]] = []
+        while i < len(lines) and not _HASH.fullmatch(lines[i].strip()) and not lines[i].startswith("$"):
+            if lines[i].startswith("A") and i + 1 < len(lines):
+                a = lines[i + 1].split()
+                if len(a) == 2 and int(a[0]) in APPLY:
+                    affects.append((APPLY[int(a[0])], int(a[1])))
+                i += 2
+            elif lines[i].startswith("E"):
+                _, i = _read_tilde(lines, i + 1)
+                _, i = _read_tilde(lines, i)
+            else:
+                i += 1
         out[vnum] = Obj(vnum=vnum, keywords=names.split(), short=short.strip(), long=long_.strip(),
-                        type=ITEM_TYPES.get(t, "other"))
+                        type=ITEM_TYPES.get(t, "other"), wear=wear, extra=extra, values=vals[:4],
+                        weight=num[0], cost=num[1], level=num[3], affects=affects)
+    return out
+
+
+def parse_resets(path: Path) -> list[tuple[str, int, int]]:
+    """db.c load_zones commands we use: (M, mob, room), (E|G, obj, mob loaded last), (O, obj, room)."""
+    out: list[tuple[str, int, int]] = []
+    last_mob = -1
+    for line in _lines(path):
+        f = line.split()
+        if not f or f[0] not in "MEGO" or len(f) < 4:
+            continue
+        try:
+            a = [int(x) for x in f[1:6] if x.lstrip("-").isdigit()]
+        except ValueError:
+            continue
+        if f[0] == "M" and len(a) >= 4:
+            last_mob = a[1]
+            out.append(("M", a[1], a[3]))
+        elif f[0] in "EG" and len(a) >= 2 and last_mob >= 0:
+            out.append((f[0], a[1], last_mob))
+        elif f[0] == "O" and len(a) >= 4:
+            out.append(("O", a[1], a[3]))
+    return out
+
+
+def parse_shp(path: Path) -> dict[int, Shop]:
+    """shop.c boot_the_shops (v3.0 format): products -1, buy profit, sell profit, buy types -1,
+    7 messages~, temper, bitvector, keeper, trade_with, rooms -1, open/close times."""
+    lines = _lines(path)
+    out: dict[int, Shop] = {}
+    i = 0
+
+    def ints_until_minus1() -> list[int]:
+        nonlocal i
+        vals = []
+        while i < len(lines):
+            tok = lines[i].split(";")[0].strip()
+            i += 1
+            if tok.startswith("-1"):
+                return vals
+            word = tok.split()[0] if tok else ""
+            if word.lstrip("-").isdigit():
+                vals.append(int(word))
+            elif word.upper() in [n.upper() for n in ITEM_TYPE_NAMES]:
+                vals.append([n.upper() for n in ITEM_TYPE_NAMES].index(word.upper()))
+        return vals
+
+    while i < len(lines):
+        m = re.fullmatch(r"#(\d+)~?", lines[i].strip())
+        if not m:
+            i += 1
+            continue
+        vnum = int(m.group(1))
+        i += 1
+        products = ints_until_minus1()
+        try:
+            buy_profit, sell_profit = float(lines[i]), float(lines[i + 1])
+        except (ValueError, IndexError):
+            continue
+        i += 2
+        types = ints_until_minus1()
+        for _ in range(7):
+            _, i = _read_tilde(lines, i)
+        try:
+            keeper = int(lines[i + 2].split()[0])
+        except (ValueError, IndexError):
+            continue
+        i += 4                                   # temper, bitvector, keeper, trade_with
+        rooms = ints_until_minus1()
+        out[vnum] = Shop(vnum, keeper, rooms, products,
+                         [ITEM_TYPES.get(t, ITEM_TYPE_NAMES[t] if 0 <= t < len(ITEM_TYPE_NAMES) else "other")
+                          for t in types], buy_profit, sell_profit)
     return out
 
 
@@ -184,4 +296,12 @@ def load_world(world_dir: Path) -> World:
             world.mobs[vnum] = mob
     for f in sorted((world_dir / "obj").glob("*.obj")):
         world.objs.update(parse_obj(f))
+    for f in sorted((world_dir / "zon").glob("*.zon")):
+        for kind, a, b in parse_resets(f):
+            if kind == "M" and a in world.mobs:
+                world.mobs[a].homes.append(b)
+            elif kind in "EG" and b in world.mobs:
+                world.mobs[b].carries.append(a)
+    for f in sorted((world_dir / "shp").glob("*.shp")) if (world_dir / "shp").exists() else ():
+        world.shops.update(parse_shp(f))
     return world

@@ -2,6 +2,7 @@
 sigil: 0
 package: class-warrior
 policies:
+  gear_avoid: [anti_neutral, anti_warrior]   # D32: 이 표시가 있는 물건은 못 쓴다
   guild_room: "The Tournament And Practice Yard"
   skill_plan:
     - {skill: kick, target: 6}

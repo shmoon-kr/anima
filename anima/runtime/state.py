@@ -28,6 +28,7 @@ class AgentState:
     practices: int = 0
     position: str = "standing"
     rest_need: float = 0.0          # 0..1, strongest need among `camp: true` behaviors (party camp, D30)
+    shop_wants: list = field(default_factory=list)   # shop rooms worth a trip for me (D32)
     hungry: bool = False
     thirsty: bool = False
     has_light: bool = False

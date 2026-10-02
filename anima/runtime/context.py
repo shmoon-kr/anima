@@ -38,7 +38,7 @@ class SoloParty:
                 "resting": False, "rally": None, "role": "", "leader_room": None, "leader_vnum": None,
                 "with_leader": True, "following": False, "in_group": False, "online": 1, "min_mv_pct": 100, "unseen_here": 0, "all_following": True,
                 "thirsty_in_room": [], "hungry_in_room": [], "camping": False, "sentry": None,
-                "is_sentry": False}.get(field)
+                "is_sentry": False, "trip_stop": None, "trip_wanted": False, "shop_busy": False}.get(field)
 
     def sleepers_here(self, agent: str) -> list[str]:
         return []
@@ -149,6 +149,8 @@ class Context:
             return [o.get("text", "") for o in s.occupants
                     if not self.party.is_party_member(o.get("text", "").split(" ", 1)[0])
                     and not any(h.startswith("my_group") for h in o.get("hints", []))]
+        if k == "shop":                     # a shopkeeper's room (world data)
+            return self.items.shop_here() is not None
         if k == "unidentified":            # strangers the world data cannot name (a question for the Animus)
             strangers = self._room("strangers", s)
             return [o.get("text", "") for o in s.occupants if o.get("text", "") in strangers
@@ -225,6 +227,10 @@ class Context:
             "has_item": lambda kind: self._inventory_of(kind) is not None,
             "next_skill": self._next_skill,
             "practices_spare": self._practices_spare,
+            "upgrade_item": lambda: self.items.upgrade_item(),
+            "sellable_here": lambda keep: self.items.sellable_here(keep),
+            "buy_here": lambda reserve: self.items.buy_here(reserve),
+            "pickup_item": lambda min_cost: self.items.pickup_item(min_cost),
         }
         for name, fn in {
             "send": self.a_send, "attack": self.a_attack, "use": self.a_use, "cast": self.a_cast,
@@ -237,6 +243,9 @@ class Context:
             "next_rally": lambda: getattr(self.party, "next_rally", lambda a: None)(self.agent),
             "mark": lambda key: self.state.marks.__setitem__(key, self.clock()),
             "wait": lambda secs: self.task_hooks.get("wait", lambda s: None)(secs),
+            "wear_upgrade": lambda: self.items.wear_upgrade(),
+            "start_trip": lambda: getattr(self.party, "start_trip", lambda a: None)(self.agent),
+            "trip_progress": lambda: getattr(self.party, "trip_progress", lambda a: None)(self.agent),
         }.items():
             fns[name] = fn
         assert set(fns) == set(api.FUNCS_BY_NAME), set(fns) ^ set(api.FUNCS_BY_NAME)
@@ -309,6 +318,14 @@ class Context:
             {self.memoria.world.rooms[v].zone for v in rooms}
 
     # ------------------------------------------------------------ actions
+    @property
+    def items(self):
+        it = self.__dict__.get("_items")
+        if it is None:
+            from anima.runtime.items import Items
+            it = self.__dict__["_items"] = Items(self)
+        return it
+
     def cmd(self, text: str, *, move: bool = False, force: bool = False) -> bool:
         now = self.clock()
         if not force and now - self.last_sent.get(text, NEVER) < SAME_COMMAND_GAP_S:

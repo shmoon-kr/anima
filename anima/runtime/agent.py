@@ -105,6 +105,10 @@ class AgentRuntime:
     def tick(self) -> None:
         if not self.state.in_game:
             return
+        pol = self.program.policies
+        if pol.get("sell_at") is not None:          # D32: which shops are worth a trip (cached a minute)
+            self.state.shop_wants = self.ctx.items.shop_wants(pol.get("inv_keep") or [], pol.get("gold_reserve") or 0,
+                                                              pol["sell_at"])
         self._asks()
         self.selector.tick(self._last_seq)
         self.tasks.tick()

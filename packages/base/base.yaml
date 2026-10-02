@@ -19,8 +19,14 @@ policies:
   skill_plan: []          # [{skill, target(0~8), attack?}] 중요한 순서
   reserve_for: {}         # {기술: 열리는 레벨}: 다음 레벨 핵심 기술을 위해 연습 2회를 남김
   inertia: 0.1
-  inv_hard: 12            # 이보다 많이 들면 남는 장비를 버린다 (SPEC §2 장비와 물건)
+  inv_hard: 16            # 이보다 많이 들면 남는 물건을 버린다 (보통은 그 전에 판다, D32)
   inv_keep: [food, drinkcon, light, key]
+  sell_at: 6              # 팔 물건이 이만큼 쌓이면 장보기를 원한다 (D32)
+  gold_reserve: 100       # 사고 나서도 남길 금화
+  food_min: 2             # 음식이 이보다 적으면 빵집에서 산다
+  pickup_min_cost: 20     # 바닥 물건은 값이 이 이상이거나 더 나은 장비거나 음식이면 줍는다
+  gear_avoid: [anti_neutral]   # 쓸 수 없는 물건 표시 (세계 파일 ITEM_ANTI_*). 성향은 중립(-349..349). 직업 패키지가 더한다
+  weapon_kinds: []        # 비어 있으면 아무 무기. 도적은 [pierce] (backstab, act.offensive.c:152)
 
 # Animus(LLM) 이 바꿀 수 있는 값과 범위 (PHASE-2-PLAN S1, D27). 여기 없는 값은 바꿀 수 없다.
 animus:
@@ -36,6 +42,9 @@ animus:
     danger:      {type: words, max_len: 40, grow_only: true}
     skill_plan:  {type: plan, max_len: 20}
     inv_keep:    {type: words, max_len: 8, grow_only: true}
+    sell_at:     {type: number, min: 2, max: 14, step: 4}
+    gold_reserve: {type: number, min: 0, max: 5000, step: 1000}
+    food_min:    {type: number, min: 0, max: 6, step: 2}
 
 reflexes:
   setup_on_enter:
@@ -159,6 +168,31 @@ behaviors:
       - "max(max(inverse_linear(self.hp_pct, policy.rest_pct, 90), inverse_linear(self.mp_pct, policy.rest_mp_pct, 90)), max(max(below(self.mv, policy.rest_mv), below(self.mv_pct, policy.rest_mv_pct)), bool(self.behavior == 'sleep' and (self.hp_pct < 90 or self.mv_pct < 60))))"
     do: ["sleep()"]
     every_s: 10
+  # 장비와 물건 (D32): 더 나은 것을 입고, 상점 방에서는 필요 없는 것을 팔고 필요한 것을 산다
+  wear_upgrade:
+    weight: 0.6
+    when: "not self.fighting and not party.camping"
+    considerations: ["bool(upgrade_item())"]
+    do: ["stand()", "wear_upgrade()"]
+    every_s: 5
+  sell_here:
+    weight: 0.86
+    when: "room.shop and not self.fighting"
+    considerations: ["bool(sellable_here(policy.inv_keep))"]
+    do: ["stand()", "mark('shopping')", "send('sell ' + sellable_here(policy.inv_keep))", "send('inventory')"]
+    every_s: 3
+  buy_here:
+    weight: 0.86
+    when: "room.shop and not self.fighting"
+    considerations: ["bool(buy_here(policy.gold_reserve))"]
+    do: ["stand()", "mark('shopping')", "send('buy ' + buy_here(policy.gold_reserve))", "send('inventory')", "send('score')"]
+    every_s: 4
+  pick_up:
+    weight: 0.55
+    when: "not self.fighting and len(self.inventory) < policy.inv_hard and not room.dark"
+    considerations: ["bool(pickup_item(policy.pickup_min_cost))"]
+    do: ["stand()", "send('get ' + pickup_item(policy.pickup_min_cost))", "send('inventory')"]
+    every_s: 4
   junk_surplus:
     weight: 0.5
     when: "not self.fighting and len(self.inventory) > policy.inv_hard"

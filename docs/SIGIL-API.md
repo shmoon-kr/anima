@@ -42,6 +42,7 @@
 | `room.occupants` | list | 방 안 존재 줄 목록 (화면 그대로) |
 | `room.objects` | list | 바닥 물건 줄 목록 |
 | `room.strangers` | list | 방 안 존재 중 파티원이 아닌 것 |
+| `room.shop` | bool | 상점 주인이 있는 방 (세계 데이터) |
 | `room.unidentified` | list | 낯선 존재 중 세계 파일로 알아볼 수 없는 것 (Animus 에게 물을 거리) |
 | `room.exits` | list | 출구 방향 목록 |
 | `room.has_fountain` | bool | 분수대가 있다 |
@@ -56,6 +57,9 @@
 | `party.camping` | bool | 내 방의 파티가 야영 중 (한 명의 휴식 필요가 camp_start 에 닿으면 시작, 아무도 필요 없으면 끝, D30) |
 | `party.sentry` | text | 야영 중 보초 이름 (시작할 때 체력이 가장 많은 파티원, 야영 동안 고정). 야영이 아니면 null |
 | `party.is_sentry` | bool | 내가 보초 |
+| `party.trip_stop` | number | 장보기 중 리더가 다음에 갈 상점 방 번호 (go_to 에 쓴다). 장보기가 아니면 null (D32) |
+| `party.trip_wanted` | bool | 누군가 팔 것이 쌓였거나 살 것이 있고, 지난 장보기 뒤 trip_cooldown_s 가 지났다 |
+| `party.shop_busy` | bool | 같은 방 파티원이 방금(6초 안) 사거나 팔았다 |
 | `party.rally` | text | 집결지 방 이름 |
 | `party.members_in_room` | list | 같은 방 파티원 (targets 용) |
 | `party.role` | text | 역할 배정에서 받은 내 역할 이름들 (쉼표) |
@@ -126,6 +130,10 @@
 | `member_with_role(role)` | 같은 방에서 그 역할을 맡은 파티원 이름 (나 제외, 없으면 null) |
 | `has_role(role)` | 내가 그 역할을 맡았다 |
 | `has_item(kind)` | 가진 물건 중 그 종류(food, drinkcon, light, weapon ...)가 있다 (세계 데이터 기준) |
+| `upgrade_item()` | 가진 물건 중 입은 것보다 나은 장비의 키워드 (policy.gear_avoid·weapon_kinds·레벨 고려, 없으면 null) |
+| `sellable_here(keep)` | 이 방 상점이 사 주고 내게 필요 없는 물건의 키워드 (keep 종류·더 나은 장비·저주·nosell 제외) |
+| `buy_here(reserve)` | 이 방 상점에서 살 것의 키워드: 살 수 있는 장비 개선, 없으면 policy.food_min 까지 음식 (reserve 금화는 남김) |
+| `pickup_item(min_cost)` | 바닥 물건 중 주울 것의 키워드: 값이 min_cost 이상, 장비 개선, 또는 음식 |
 | `next_skill(plan)` | 연습 계획 [{skill, target, attack?}] 에서 다음에 연습할 기술 (없으면 null). target 은 숙련 단계 0~8, 상한에 닿은 기술은 건너뜀, attack 기술은 더 새 attack 을 배웠으면 건너뜀 |
 | `practices_spare(reserve_for)` | 남은 연습 수. 다음 레벨에 열리는 기술이 reserve_for {기술: 레벨} 에 있으면 2를 남김 |
 
@@ -133,6 +141,9 @@
 
 | 동작 | 뜻 |
 |---|---|
+| `wear_upgrade()` | 가장 나은 장비 개선을 입는다 (자리가 차 있으면 못한 것을 벗고), 그 뒤 equipment·inventory |
+| `start_trip()` | 리더: 파티원들이 가고 싶은 상점들로 장보기를 시작 |
+| `trip_progress()` | 리더: 지금 상점에서 모두 볼일이 끝났으면 다음 상점으로 |
 | `send(text)` | 명령 그대로 보내기 (금지 명령은 검증에서 거부) |
 | `attack(target)` | 공격 시작 (kill) |
 | `use(skill, target)` | 기술 사용. target 생략 가능 |
