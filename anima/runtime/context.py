@@ -364,7 +364,12 @@ class Context:
             self.cmd(f"cast '{sp}' {target}".strip() if target else f"cast '{sp}'")
 
     def a_rest(self) -> None:
-        if self.state.position not in ("resting", "sleeping"):
+        """Rest awake. From sleep: wake first (rest is chosen over sleep only when sleeping is not safe,
+        e.g. the camp's sentry, D30)."""
+        if self.state.position == "sleeping":
+            self.cmd("wake")
+            self.cmd("rest")
+        elif self.state.position != "resting":
             self.cmd("rest")
 
     def a_sleep(self) -> None:

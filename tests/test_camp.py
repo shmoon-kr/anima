@@ -72,3 +72,15 @@ def test_a_hit_does_not_wake_a_sleeper_so_we_wake_ourselves(memoria_proto):
     h.ev("combat.hit", attacker="the kobold", victim="self", verb="hit", severity=2, kind="weapon")
     assert h.rt.state.position == "sleeping"                  # fight.c update_pos
     assert h.take()[:2] == ["wake", "stand"]
+
+
+def test_the_sentry_never_sleeps_even_when_it_needs_rest_itself(memoria_proto):
+    p = camp(memoria_proto)
+    p.ev("Senia", "prompt", hp=100, mp=100, mv=10)            # the sentry is exhausted too
+    p.ev("Senia", "position", position="sleeping")            # and was asleep before (inertia)
+    p.take("Senia")
+    p.tick(11)
+    p.tick(1)
+    assert p.board.camp("Senia") == "Senia"
+    out = p.take("Senia")
+    assert "wake" in out and "rest" in out and "sleep" not in out
