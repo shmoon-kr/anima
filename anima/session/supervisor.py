@@ -89,6 +89,8 @@ class Supervisor:
     _tasks: list[asyncio.Task] = field(default_factory=list)
     _stopping: asyncio.Event = field(default_factory=asyncio.Event)
     _watchers: list[tuple[str, asyncio.Queue]] = field(default_factory=list)
+    _viewers: list[tuple[set[str], asyncio.Queue]] = field(default_factory=list)   # (agents, queue) of `view`
+    _screen: dict[str, Any] = field(default_factory=dict)                          # agent -> recent coloured text
 
     def build(self) -> None:
         self.memoria = Memoria.from_tbamud(self.cfg.world_dir, self.cfg.hazards)
@@ -100,6 +102,8 @@ class Supervisor:
         providers, budget = make_providers(self.cfg.animus, FakeProvider(default_answer, name="default"))
         self.animus = AnimusQueue(self.bus, providers, lambda a: self._stamper[a], budget_per_hour=budget)
         self.bus.subscribe(self._to_watchers)
+        from anima.session.humans import Desk
+        self.desk = Desk(list(self.agents), [Path("config/aliases.yaml"), Path("config/aliases.example.yaml")])
         programs = {n: load_agent(self.cfg.agents_dir / f"{n}.yaml", self.cfg.packages_dir) for n in self.agents}
         from anima.party.blackboard import PartyBoard
         first = programs[self.agents[0]].policies
@@ -118,6 +122,7 @@ class Supervisor:
             sess = Session(name, self.cfg.host, self.cfg.port, self.cfg.password, self.bus, st)
             rt = AgentRuntime(name, prog, self.memoria, self.bus, st, sess.send, time.monotonic,
                               party=self.party, animus=self.animus)
+            sess.on_text = lambda text, n=name: self._text(n, text)
             self.party.register(name, rt.state)
             rt.attach()
             self.sessions[name], self.runtimes[name] = sess, rt
@@ -324,6 +329,57 @@ class Supervisor:
         for agent, q in list(self._watchers):
             if ev.agent == agent:
                 q.put_nowait(ev)
+        if ev.type != "prompt":
+            for agents, q in list(self._viewers):
+                if ev.agent in agents:
+                    q.put_nowait({"k": "ev", "a": ev.agent, "ev": ev.to_dict()})
+
+    # ------------------------------------------------------------ people: screens and input
+    SCREEN_KEEP = 16000                                  # characters of scrollback per character
+
+    def _text(self, agent: str, text: str) -> None:
+        buf = (self._screen.get(agent, "") + text)[-self.SCREEN_KEEP:]
+        self._screen[agent] = buf
+        for agents, q in list(self._viewers):
+            if agent in agents:
+                q.put_nowait({"k": "text", "a": agent, "s": text})
+
+    def human_input(self, line: str, focus: str | None) -> list[str]:
+        """Route a typed line (aliases, #name, #all, #party, #go, #take); returns notes for the person."""
+        mates = self.party.in_room_with(focus) if focus in self.runtimes else []
+        orders, notes = self.desk.route(line, focus, mates)
+        from anima.session.humans import HOLD_S
+        for o in orders:
+            rt, sess = self.runtimes.get(o.agent), self.sessions.get(o.agent)
+            if rt is None or sess is None:
+                continue
+            if o.kind == "send":
+                rt.hold(HOLD_S)
+                sess.send(o.text, Source("human", "play", "typed by a person"), priority=0)
+            elif o.kind == "go":
+                rt.hold(HOLD_S)
+                rt.human_goal = o.text
+                notes.append(f"{o.agent}: walking to {o.text}")
+            elif o.kind == "stop":
+                rt.human_goal = None
+                notes.append(f"{o.agent}: stopped")
+            elif o.kind == "take":
+                rt.taken = True
+                rt.tasks.abandon("a person took over")
+                notes.append(f"{o.agent}: yours until #release {o.agent}")
+            elif o.kind == "release":
+                rt.taken, rt.human_until, rt.human_goal = False, -1e9, None
+                notes.append(f"{o.agent}: back to the agent")
+            rt._publish("runtime.human", {"event": o.kind, "text": o.text, "taken": rt.taken})
+        return notes
+
+    def party_line(self) -> dict[str, Any]:
+        st = self.status()
+        for name, rt in self.runtimes.items():
+            st[name]["held"] = rt.taken or rt.held()
+            st[name]["taken"] = rt.taken
+            st[name]["mp_max"], st[name]["mv_max"] = rt.state.mp_max, rt.state.mv_max
+        return st
 
     async def _control(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
@@ -351,6 +407,10 @@ class Supervisor:
                     writer.write(b'{"ok": true}\n')
             elif op == "watch":
                 await self._watch(req.get("agent", ""), reader, writer)
+            elif op == "view":
+                await self._view(req, reader, writer)
+            elif op == "input":
+                writer.write((json.dumps({"notes": self.human_input(req.get("line", ""), req.get("focus"))}) + "\n").encode())
             await writer.drain()
         except (ConnectionError, json.JSONDecodeError):
             pass
@@ -377,6 +437,50 @@ class Supervisor:
             return {"ok": res.ok, "patch_id": res.patch_id, "reason": res.reason, "errors": res.errors,
                     "changes": res.changes}
         return {"error": f"unknown animus op {sub!r}"}
+
+    async def _view(self, req: dict[str, Any], reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        """Stream to a person's screen: coloured server text and events of the agents asked for, the party
+        status every second; lines the person types come back as {"line", "focus"} and are routed."""
+        agents = set(req.get("agents") or self.agents)
+        q: asyncio.Queue = asyncio.Queue()
+        entry = (agents, q)
+        self._viewers.append(entry)
+        for a in req.get("agents") or []:            # scrollback first, so the screen is not empty
+            if self._screen.get(a):
+                q.put_nowait({"k": "text", "a": a, "s": self._screen[a][-4000:]})
+
+        async def pump_in() -> None:
+            while line := await reader.readline():
+                try:
+                    msg = json.loads(line.decode())
+                except json.JSONDecodeError:
+                    continue
+                if "agents" in msg:                  # the person switched focus
+                    agents.clear()
+                    agents.update(msg["agents"])
+                    for a in msg["agents"]:
+                        if self._screen.get(a):
+                            q.put_nowait({"k": "text", "a": a, "s": self._screen[a][-4000:]})
+                if msg.get("line"):
+                    q.put_nowait({"k": "notes", "notes": self.human_input(msg["line"], msg.get("focus"))})
+
+        async def status() -> None:
+            while True:
+                q.put_nowait({"k": "status", "party": self.party_line()})
+                await asyncio.sleep(1.0)
+
+        inp, st = asyncio.create_task(pump_in()), asyncio.create_task(status())
+        try:
+            while not inp.done():
+                msg = await q.get()
+                writer.write((json.dumps(msg, ensure_ascii=False, default=str) + "\n").encode())
+                await writer.drain()
+        except (ConnectionError, BrokenPipeError):
+            pass
+        finally:
+            inp.cancel()
+            st.cancel()
+            self._viewers.remove(entry)
 
     async def _watch(self, agent: str, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         q: asyncio.Queue[Event] = asyncio.Queue()

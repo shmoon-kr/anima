@@ -43,6 +43,7 @@ class Session:
     _writer: asyncio.StreamWriter | None = None
     _menu_entries: int = 0
     queue: CommandQueue = field(init=False)
+    on_text: Callable[[str], None] | None = None     # the server's text with its colours, for people watching
 
     def __post_init__(self) -> None:
         self.adapter = TbamudTextAdapter(self.agent, stamper=self.stamper, keep_raw=True)
@@ -106,7 +107,10 @@ class Session:
                 text, reply, mark = tf.feed(data)
                 if reply:
                     writer.write(reply)
-                self._publish(self.adapter.feed(text.decode("latin-1")))
+                decoded = text.decode("latin-1")
+                if self.on_text is not None:
+                    self.on_text(decoded)
+                self._publish(self.adapter.feed(decoded))
                 if mark:
                     self._publish(self.adapter.flush())
         finally:

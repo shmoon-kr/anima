@@ -1,0 +1,9 @@
+# tintin 같은 별칭 (anima play / anima watch 에서). config/aliases.yaml 이 있으면 그걸 쓴다.
+# 첫 단어가 별칭이면 바뀐다. $1..$9 는 인자, $* 는 인자 전부, ; 로 여러 명령. 자리표시가 없으면 인자를 뒤에 붙인다.
+# #이름 명령 · #all 명령 · #party 명령(같은 방) · #go 방이름(길찾기로 걸어감) · #stop · #take 이름 · #release 이름
+tg: "#go The Temple Square"
+zz: "#all sleep"
+up: "#all stand"
+k: "kill $1"
+heal: "#lumina cast 'cure light' $1"
+gather: "#all #go The Temple Square"

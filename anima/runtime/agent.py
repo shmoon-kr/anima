@@ -44,6 +44,9 @@ class AgentRuntime:
     on_patch: Callable[[str, Any, str], None] | None = None         # (agent, answer, request id): `answer: patch`
     _ask_prev: dict[str, bool] = field(default_factory=dict)
     _ask_last: dict[str, float] = field(default_factory=dict)
+    human_until: float = -1e9          # a person typed for this character: behavior selection waits
+    taken: bool = False                # a person holds the wheel (#take) until #release
+    human_goal: str | None = None      # #go: a room the person wants to walk to
     _ask_open: dict[str, str] = field(default_factory=dict)          # request id -> ask name
     _dirty: bool = True
     _last_seq: int | None = None
@@ -102,8 +105,19 @@ class AgentRuntime:
             self.ctx.answers.pop(name, None)           # default stands
 
     # ------------------------------------------------------------ ticking
+    def held(self) -> bool:
+        return self.taken or self.clock() < self.human_until
+
+    def hold(self, seconds: float) -> None:
+        self.human_until = max(self.human_until, self.clock() + seconds)
+        self.tasks.abandon("a person took over")
+
     def tick(self) -> None:
         if not self.state.in_game:
+            return
+        if self.human_goal is not None:
+            self._human_step()
+        if self.held():                  # reflexes still answer events; choosing and tasks wait for the person
             return
         pol = self.program.policies
         if pol.get("sell_at") is not None:          # D32: which shops are worth a trip (cached a minute)
@@ -156,6 +170,19 @@ class AgentRuntime:
                                        priority=s.get("priority", "routine"), question_kind=name,
                                        question=s["question"], context=ctx_vals, answer_schema=schema,
                                        timeout_s=float(s["timeout_s"]), default=s["default"]))
+
+    def _human_step(self) -> None:
+        """One step toward the person's #go room (Memoria paths), as a human-sourced command."""
+        import json
+        from anima.sigil.expr import parse
+        goal = self.human_goal
+        v = self.memoria.locator(self.agent).vnum
+        room = self.memoria.world.rooms.get(v) if v is not None else None
+        if room is not None and (room.name == goal or str(v) == goal):
+            self.human_goal = None
+            return
+        self.ctx.run_actions([parse(f"go_to({json.dumps(goal)})")],
+                             Source("human", "play/go", f"walking to {goal}"), priority=0)
 
     # ------------------------------------------------------------ reloading
     def reload(self, build: Callable[[], Program]) -> bool:

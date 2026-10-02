@@ -68,9 +68,13 @@ def main(argv: list[str] | None = None) -> int:
     kd.add_argument("--agents", type=Path, default=Path("agents"))
     kd.add_argument("--packages", type=Path, default=Path("packages"))
 
-    w = sub.add_parser("watch", help="한 에이전트의 이벤트를 실시간으로 보고, 입력한 줄을 사람 명령으로 보냄")
+    w = sub.add_parser("watch", help="한 캐릭터의 화면 (mud: 서버 원문, narrate: 원문 + 결정, events: 이벤트). 입력은 사람 명령")
     w.add_argument("agent")
-    w.add_argument("--raw", action="store_true", help="JSON 그대로")
+    w.add_argument("--mode", choices=["mud", "narrate", "events"], default="mud")
+    w.add_argument("--raw", action="store_true", help="이벤트 JSON 그대로")
+    pl = sub.add_parser("play", help="tintin 처럼: 위는 캐릭터 화면, 아래는 파티 상태, 맨 아래 입력 (#name, #all, #go, #take ...)")
+    pl.add_argument("agent", nargs="?", help="처음 볼 캐릭터 (기본: 리더)")
+    pl.add_argument("--mode", choices=["mud", "narrate", "events"], default="narrate")
 
     args = p.parse_args(argv)
     if args.cmd == "replay":
@@ -88,7 +92,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "reload":
         return _control({"op": "reload"})
     if args.cmd == "watch":
-        return _watch(args)
+        from anima.session.terminal import watch
+        return watch(args.agent, args.mode, RUN_DIR, describe) if not args.raw else _watch(args)
+    if args.cmd == "play":
+        from anima.session.terminal import play
+        return play(args.agent or _leader(), args.mode, RUN_DIR, describe)
     if args.cmd == "animus":
         return _animus(args)
     return 1
@@ -193,6 +201,18 @@ def _bench(args: argparse.Namespace) -> int:
     if not args.no_write:
         bench.write(md)
     return 0
+
+
+def _leader() -> str:
+    from anima.sigil.program import SigilError, load_agent
+    for m in sorted(Path("agents").glob("*.yaml")):
+        try:
+            lead = load_agent(m, Path("packages")).policies.get("leader")
+        except SigilError:
+            continue
+        if lead:
+            return lead
+    return next((m.stem for m in sorted(Path("agents").glob("*.yaml"))), "")
 
 
 def _status() -> int:

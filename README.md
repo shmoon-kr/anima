@@ -43,7 +43,8 @@ cp config/anima.example.toml config/anima.toml        # path to your local tbaMU
 .venv/bin/anima sigil check
 .venv/bin/anima start            # all agents in the background (leader first)
 .venv/bin/anima status           # per agent: connection, HP/MP/MV, room, behavior, top scores
-.venv/bin/anima watch Vallen     # live events and why each command was sent; typed lines go out as human commands
+.venv/bin/anima play             # the MUD screen with a party panel; type like tintin: #lil kick, #all rest, #go The Temple Square
+.venv/bin/anima watch Vallen     # one character's screen: --mode mud (server text) | narrate (+ decisions) | events
 .venv/bin/anima reload           # reload Sigil packages into running agents (a failing one keeps the old program)
 .venv/bin/anima stop             # quit the game cleanly
 .venv/bin/anima stats recordings/<file>.jsonl     # kills, deaths, flees, separation ... (also works on tintin logs)
