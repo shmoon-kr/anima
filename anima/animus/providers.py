@@ -39,15 +39,19 @@ def render(req: Request) -> tuple[str, str]:
 
 
 def extract(text: str) -> tuple[Any, str]:
-    """(answer, why) from the first JSON object in a reply. ValueError if there is none."""
+    """(answer, why) from the first JSON object in a reply. ValueError if there is none.
+    Models sometimes skip the {"answer": ...} wrapper and give the answer object itself: then the
+    whole object is the answer (the schema check decides whether it is a valid one)."""
     text = re.sub(r"(?s)^.*</think>", "", text)
     for m in re.finditer(r"\{", text):
         try:
             obj, _ = json.JSONDecoder().raw_decode(text[m.start():])
         except json.JSONDecodeError:
             continue
-        if isinstance(obj, dict) and "answer" in obj:
-            return obj["answer"], str(obj.get("why", ""))
+        if isinstance(obj, dict):
+            if "answer" in obj:
+                return obj["answer"], str(obj.get("why", ""))
+            return obj, str(obj.get("why") or obj.get("reason") or "")
     raise ValueError(f"no JSON answer in reply: {text[:160]!r}")
 
 

@@ -69,8 +69,8 @@ S1 과 S2 는 서로 의존하지 않아 같이 진행한다. S2 의 지연 측�
   - `ClaudeProvider`: `claude -p --output-format json` 비동기 서브프로세스, 도구 끔. 예산은 대기열의 `budget_per_hour` 사용
   - 둘 다 JSON 만 받는다: 답에서 JSON 을 뽑아 `answer_schema` 검사(이미 있음), 실패는 `animus.rejected {reason: schema}`
 - [x] `config/anima.toml [animus]`: 단계별 공급자·모델·URL·시간 제한·예산. 기본은 지금처럼 Fake (설정이 없으면 1단계와 같게 동작) — 됨 (`anima.example.toml` 참고)
-- [ ] `anima animus bench`: 질문 종류별 프롬프트로 지연 측정. 1개·6개 동시. 모델 2~3개(MoE 우선) 결과를 `docs/ANIMUS-BENCH.md` 에 기록 → **모델 선택** (벤치 결과로 고른다, MoE 유력)
-  - 2026-10-03: claude CLI 6~12초, 답 6/6 유효. **LM Studio 는 꺼져 있어 로컬 측정 대기** ★ (켜면 `anima animus bench local_fast`)
+- [x] `anima animus bench`: 질문 종류별 프롬프트로 지연 측정. 1개·6개 동시. 모델 2~3개(MoE 우선) 결과를 `docs/ANIMUS-BENCH.md` 에 기록 → **모델 선택** (벤치 결과로 고른다, MoE 유력)
+  - 2026-10-03: claude CLI 6~12초, 6/6 유효. 로컬 `qwen/qwen3.8-27b`(192.168.1.191) 6초, 6개 동시 11~19초, 24/24 유효 → **로컬 모델 결정** (MoE 는 그 호스트에 없음, `ANIMUS-BENCH.md`)
 - [x] Claude 시간당 상한과 정기 호출 간격 — **결정: 시간당 6회(정기 2 + 긴급 여유 4), 정기 30분, 긴급 최소 간격 5분**. 실제 사용량을 보고 조정
 - [x] 테스트는 계속 LLM 없이: 가짜·재생 공급자. 실제 공급자는 `-m live` 표시가 있는 테스트만 — 됨 (`test_providers.py`: 가짜 LM Studio 서버·가짜 claude 명령)
 

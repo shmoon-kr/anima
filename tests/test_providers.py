@@ -29,7 +29,7 @@ def test_prompt_marks_game_text_as_data_and_states_the_schema():
 
 def test_answer_is_the_first_json_object_with_an_answer_key():
     assert extract('<think>x</think>Sure! {"answer": 60, "why": "mana"} trailing') == (60, "mana")
-    assert extract('{"note": 1} then {"answer": [1, 2]}') == ([1, 2], "")
+    assert extract('{"changes": [], "reason": "fine"}') == ({"changes": [], "reason": "fine"}, "fine")
     with pytest.raises(ValueError):
         extract("no json here")
 

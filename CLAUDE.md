@@ -29,7 +29,7 @@ MUD 세계에서 AI 에이전트(와 사람)가 살아가게 하는 런타임. t
 ## 환경
 - 테스트 서버: tbaMUD 2025, `192.168.1.101:4000` (SarahHome). 캐릭터 6인(D8): Vallen(전사·리더), Lil(마법사), Senia(전사), Lumina(성직자), Elysia(성직자), Carmilla(도적)
 - 비밀번호: 저장소 밖 또는 gitignore 된 secret 파일. 관리자 캐릭터 Evan 은 절대 사용하지 말 것
-- 로컬 LLM: LM Studio `localhost:1234/v1` (qwen/qwen3.8-27b, thinking 은 빈 `<think></think>` 프리필로 끔)
+- 로컬 LLM: LM Studio `192.168.1.191:1234/v1` (`config/anima.toml [animus] local_url`) (qwen/qwen3.8-27b, thinking 은 빈 `<think></think>` 프리필로 끔)
 - 전략 LLM: `claude -p` (API 키 없음)
 - 언어: Python 3, asyncio
 
