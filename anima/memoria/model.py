@@ -38,6 +38,7 @@ class Mob:
     hp: int
     flags: set[str]             # aggressive, memory, helper, sentinel, wimpy, aggr_evil, ...
     zone: int = -1
+    exp: int = 0                                         # a kill gives exp / 3, shared by the group (fight.c:363)
     homes: list[int] = field(default_factory=list)      # rooms where the zone resets load it (M)
     carries: list[int] = field(default_factory=list)    # objects it is loaded with (E, G)
 

@@ -7,6 +7,10 @@ level range covers us), and no aggressive mob is far above the weakest member.
 
 From play: deaths, flees and very low hit points in a zone mark it too dangerous until the weakest
 member has gained `retry_levels` levels. Kills per hour are kept so a quiet zone can be told apart.
+Zones are ranked by expected growth, not kills: a kill gives the victim's exp / 3 shared by the group
+(fight.c:363), and progress is that exp over the span of the level it is gained at (class.c level_exp).
+Before we have hunted a zone the prior is its median mob exp; after ten minutes there the measured
+growth (deaths subtracted: a death costs half of all experience, fight.c:323) takes over.
 The ladder is saved with the party (run/party.json) so it survives restarts.
 """
 from __future__ import annotations
@@ -29,6 +33,8 @@ class ZoneFit:
     median_level: float
     aggressive_max: int
     mobs: int
+    expected_growth: float | None = None     # levels per member per hour (prior, or measured once hunted)
+    measured: bool = False
 
 
 @dataclass
@@ -38,6 +44,7 @@ class ZoneRisk:
     lowest_hp_pct: float = 100.0
     kills: int = 0
     seconds: float = 0.0
+    gained: float = 0.0                       # net levels per member gained here (deaths subtracted)
     blocked_below_level: int = 0    # too dangerous until the weakest member reaches this level
     why: str = ""
 
@@ -55,6 +62,8 @@ class Ladder:
     flee_limit: int = 3                           # flees in flee_window_s that make a zone too dangerous
     flee_window_s: float = 1800.0
     low_hp_pct: float = 20.0
+    kills_per_hour: float = 25.0                  # prior: phase-1 baseline and control runs (27-28/h)
+    measured_after_s: float = 600.0
     risk: dict[int, ZoneRisk] = field(default_factory=dict)
     _stats: dict[int, tuple[float, int, int]] | None = None      # zone -> (median, aggressive max, mobs)
 
@@ -66,9 +75,24 @@ class Ladder:
             for mob in w.mobs.values():
                 for z in {w.rooms[h].zone for h in mob.homes if h in w.rooms}:
                     by_zone.setdefault(z, []).append((mob.level, "aggressive" in mob.flags))
-            self._stats = {z: (statistics.median(l for l, _ in ms), max((l for l, a in ms if a), default=0), len(ms))
+            exp: dict[int, list[int]] = {}
+            for mob in w.mobs.values():
+                for z in {w.rooms[h].zone for h in mob.homes if h in w.rooms}:
+                    exp.setdefault(z, []).append(mob.exp)
+            self._stats = {z: (statistics.median(l for l, _ in ms), max((l for l, a in ms if a), default=0), len(ms),
+                               statistics.median(exp[z]))
                            for z, ms in by_zone.items()}
         return self._stats
+
+    def growth(self, zone: int, median_exp: float, span: float | None, party_size: int) -> tuple[float | None, bool]:
+        """Expected levels per member per hour here: measured once hunted long enough, else from mob exp."""
+        prior = (median_exp / 3 / max(1, party_size) / span * self.kills_per_hour) if span else None
+        r = self.risk.get(zone)
+        if r is None or r.seconds < self.measured_after_s:
+            return prior, False
+        measured = r.gained / (r.seconds / 3600)
+        w = min(1.0, r.seconds / (3 * self.measured_after_s))
+        return (measured if prior is None else w * measured + (1 - w) * prior), True
 
     def _entrances(self, start: int, cond: Conditions) -> dict[int, tuple[int, int]]:
         """zone -> (nearest room, steps) by one breadth-first walk from start."""
@@ -87,7 +111,7 @@ class Ladder:
                     q.append(to)
         return best
 
-    def candidates(self, levels: Iterable[int], has_light: bool = True) -> list[ZoneFit]:
+    def candidates(self, levels: Iterable[int], has_light: bool = True, span: float | None = None) -> list[ZoneFit]:
         levels = [lv for lv in levels if lv]
         start = self.hub()
         if not levels or start is None:
@@ -96,12 +120,12 @@ class Ladder:
         cond = self.memoria.conditions(has_light=has_light)
         ents = self._entrances(start, cond)
         out = []
-        for z, (median, aggr, n) in self._zone_stats().items():
+        for z, (median, aggr, n, median_exp) in self._zone_stats().items():
             if z not in ents or n < 3:
                 continue
             zone = self.memoria.world.zones.get(z)
             meant_for_us = (zone is not None and 0 < zone.min_level <= weakest and avg <= zone.max_level
-                            and median <= avg + self.above + 1)     # the builder's level range covers us
+                            and avg - self.below - 1 <= median <= avg + self.above + 1)   # the builder's range covers us
             if not (avg - self.below <= median <= avg + self.above or meant_for_us):
                 continue
             if aggr > weakest + self.aggressive_margin:
@@ -110,16 +134,21 @@ class Ladder:
             if r and r.blocked_below_level > weakest:
                 continue
             room, steps = ents[z]
+            g, measured = self.growth(z, median_exp, span, len(levels))
             out.append(ZoneFit(z, zone.name if zone else str(z), self.memoria.world.rooms[room].name, steps,
-                               median, aggr, n))
-        target = avg - 1
-        out.sort(key=lambda f: abs(f.median_level - target) + f.steps / 10)     # a level ~ ten steps
+                               median, aggr, n, None if g is None else round(g, 4), measured))
+        if span:                                   # growth first; walking costs a little
+            out.sort(key=lambda f: -(f.expected_growth or 0) / (1 + f.steps / 100))
+        else:
+            target = avg - 1
+            out.sort(key=lambda f: abs(f.median_level - target) + f.steps / 10)     # a level ~ ten steps
         return out
 
-    def circuit(self, levels: Iterable[int], has_light: bool = True, size: int = 2) -> list[str]:
+    def circuit(self, levels: Iterable[int], has_light: bool = True, size: int = 2,
+                span: float | None = None) -> list[str]:
         """Rally points for the party: the best fitting zones' entrances."""
         names: list[str] = []
-        for f in self.candidates(levels, has_light):
+        for f in self.candidates(levels, has_light, span):
             if f.entrance not in names:
                 names.append(f.entrance)
             if len(names) == size:
@@ -151,6 +180,11 @@ class Ladder:
         r = self._r(zone)
         r.lowest_hp_pct = min(r.lowest_hp_pct, hp_pct)
         return hp_pct < self.low_hp_pct and self._judge(zone, weakest_level, f"a member fell to {hp_pct:.0f}% hp")
+
+    def gained(self, zone: int | None, levels: float) -> None:
+        """Net progress made here, per member (negative for a death)."""
+        if zone is not None:
+            self._r(zone).gained += levels
 
     def killed(self, zone: int | None) -> None:
         if zone is not None:

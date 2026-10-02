@@ -140,12 +140,14 @@ def parse_mob(path: Path) -> dict[int, Mob]:
         _, i = _read_tilde(lines, i)
         flags = lines[i].split() if i < len(lines) else []
         stats = lines[i + 1].split() if i + 1 < len(lines) else []
+        money = lines[i + 2].split() if i + 2 < len(lines) else []          # "gold exp" (db.c parse_simple_mob)
         i += 2
         act = flag_value(flags[0]) if flags else 0
         level = int(stats[0]) if stats and stats[0].lstrip("-").isdigit() else 0
         out[vnum] = Mob(vnum=vnum, keywords=names.split(), short=short.strip(), long=long_.strip(),
                         level=level, hp=_dice_avg(stats[3]) if len(stats) > 3 else 0,
-                        flags={n for b, n in MOB_BITS.items() if act & (1 << b)})
+                        flags={n for b, n in MOB_BITS.items() if act & (1 << b)},
+                        exp=int(money[1]) if len(money) > 1 and money[1].lstrip("-").isdigit() else 0)
     return out
 
 

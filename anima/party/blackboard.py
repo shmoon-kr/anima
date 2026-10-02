@@ -37,6 +37,7 @@ class PartyBoard:
     _last_trip_t: float = -1e9
     _levels: tuple[int, ...] = ()
     _ladder_started: bool = False
+    _last_t: float | None = None
     _apart_since: dict[str, float] = field(default_factory=dict)
     _camps: dict[Any, str | None] = field(default_factory=dict)  # room -> sentry while that room camps
 
@@ -69,11 +70,19 @@ class PartyBoard:
         if self.ladder is None or self.clock() < self.override_until:
             return False
         lights = [self.states[n].has_light for n in self.online()]
-        new = self.ladder.circuit(self.levels(), has_light=bool(lights) and all(lights), size=3)
+        new = self.ladder.circuit(self.levels(), has_light=bool(lights) and all(lights), size=3, span=self.mean_span())
         if new and new != self.circuit:
             self.circuit = new
             return True
         return False
+
+    def span(self, name: str) -> int | None:
+        st = self.states.get(name)
+        return self.memoria.level_span(self.classes.get(name), st.level if st else None)
+
+    def mean_span(self) -> float | None:
+        spans = [s for n in self.online() if (s := self.span(n))]
+        return sum(spans) / len(spans) if spans else None
 
     def _move_on(self, why: str) -> None:
         """Go somewhere else now (a zone just proved too dangerous, or we outgrew it)."""
@@ -99,6 +108,16 @@ class PartyBoard:
             return
         zone = self._zone_of.get(ev.agent)
         rally_zone = self._rally_zone()
+        n = max(1, len(self.roster))
+        if ev.agent == self.leader and zone is not None:          # time spent per zone, by the leader's clock
+            last = self._last_t
+            if last is not None and 0 < ev.t - last < 60:
+                self.ladder.spent(zone, ev.t - last)
+            self._last_t = ev.t
+        if ev.type == "exp.gain" and (s := self.span(ev.agent)):
+            self.ladder.gained(zone, int(ev.data.get("amount") or 0) / s / n)
+        elif ev.type == "self.died" and st.exp is not None and (s := self.span(ev.agent)):
+            self.ladder.gained(zone, -st.exp / s / n)     # st.exp is already halved: what remains = what was lost
         bad = False
         if ev.type == "self.died":
             bad = self.ladder.died(zone, weakest)
@@ -111,9 +130,11 @@ class PartyBoard:
         if bad and zone == rally_zone:
             self._move_on(f"zone {zone} is too dangerous")
         levels = tuple(sorted(self.levels()))
+        if not self._ladder_started and len(levels) == len(self.roster) and self.ladder.hub() is not None:
+            self._ladder_started = True                    # everyone's level and the leader's room known
+            self._move_on("levels known")
         if levels != self._levels:
-            first = not self._ladder_started and len(levels) == len(self.roster)   # everyone's level known after login
-            self._ladder_started = self._ladder_started or first
+            first = False
             grew = bool(self._levels) and min(levels or (0,)) > min(self._levels)
             self._levels = levels
             if grew or first:

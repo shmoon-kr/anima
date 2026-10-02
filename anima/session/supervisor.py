@@ -144,6 +144,7 @@ class Supervisor:
             self.strategist = Strategist(
                 self.animus, self.overlay, self.party.leader, view=self._party_view, knobs=self._knob_table,
                 world=self._zones, zone_of_leader=lambda: self._zone(self.memoria.locator(self.party.leader).vnum),
+                span=self._span,
                 notes_path=self.cfg.run_dir / "animus" / "party-notes.md",
                 every_s=float(a.get("strategist_every_min", 30)) * 60, min_gap_s=float(a.get("strategist_gap_min", 5)) * 60)
             self.bus.subscribe(self.strategist.on_event)
@@ -156,6 +157,9 @@ class Supervisor:
         while self._recent and self._recent[0].t < ev.t - 1800:
             self._recent.popleft()
 
+    def _span(self, agent: str, level: int) -> int | None:
+        return self.memoria.level_span(self.party.classes.get(agent), level)
+
     def _ask_facts(self, agent: str, facts: list[str]) -> dict[str, Any]:
         out: dict[str, Any] = {}
         if "knobs" in facts:
@@ -167,7 +171,7 @@ class Supervisor:
             out["locked_by_strategist_s"] = self.overlay.locked_keys(agent)
         if "recent" in facts:
             from anima.animus.strategist import summarize
-            sm = summarize(list(self._recent))
+            sm = summarize(list(self._recent), self._span)
             out["last_30_minutes"] = {"me": sm.get("members", {}).get(agent),
                                       **{k: v for k, v in sm.items() if k != "members"}}
         return out
@@ -199,7 +203,7 @@ class Supervisor:
         lad = self.party.ladder
         if lad is not None:
             lv = self.party.levels()
-            out["zone_ladder"] = {"fitting_zones": [vars(f) for f in lad.candidates(lv)[:6]],
+            out["zone_ladder"] = {"fitting_zones": [vars(f) for f in lad.candidates(lv, span=self.party.mean_span())[:6]],
                                   "too_dangerous_for_now": lad.blocked(min(lv or [0]))}
         return out
 

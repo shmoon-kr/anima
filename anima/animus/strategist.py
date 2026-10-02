@@ -31,7 +31,9 @@ WINDOW_S = 1800.0
 QUESTION = (
     "You are the strategist of a party of agents playing a text MUD together. Decide the party's direction "
     "for the next half hour: where it hunts (rally, circuit), when members rest or flee, what it hunts, and "
-    "the weights of efficiency behaviors. Look first at where time is lost (waiting for resting members, "
+    "the weights of efficiency behaviors. Judge by growth (levels per hour, exp scaled by each level's span, "
+    "deaths subtracted since a death costs half of all experience), not by kills: weak mobs die fast and teach "
+    "little. Look first at where time is lost (waiting for resting members, "
     "stretches without kills, revisiting rooms) and at risk (deaths, flees, lowest HP). Change few things and "
     "say why; change nothing if the party is doing well. Your changes go through a validator: only the keys "
     "under `knobs`, inside their ranges and steps; a rejected change tells you why next time. Give `ttl_s` "
@@ -44,21 +46,25 @@ SCHEMA = dict(PATCH_SCHEMA, shape=PATCH_SCHEMA["shape"]
 _ids = itertools.count(1)
 
 
-def summarize(events: list[Event]) -> dict[str, Any]:
-    """The last window through anima stats, compact enough for a prompt."""
+def summarize(events: list[Event], span=None) -> dict[str, Any]:
+    """The last window through anima stats, compact enough for a prompt. Growth (levels per hour,
+    exp scaled by each level's span, deaths subtracted) comes first: kills alone mislead."""
     if not events:
         return {}
-    st = compute(events, window_min=10)
+    st = compute(events, window_min=10, span=span)
     h = max(st.hours, 1e-9)
-    out: dict[str, Any] = {"minutes": round(st.hours * 60), "kills": len(st.kills),
-                           "kills_per_hour": round(len(st.kills) / h, 1)}
+    out: dict[str, Any] = {"minutes": round(st.hours * 60),
+                           "growth_levels_per_hour_per_member": None if st.progress_per_hour is None
+                           else round(st.progress_per_hour, 4),
+                           "kills": len(st.kills), "kills_per_hour": round(len(st.kills) / h, 1)}
     if st.flow:
         fl = st.flow
         out.update(leader_idle_min=round(fl.idle_s / 60, 1),
                    leader_waiting_for_resting_member_min=round(fl.waiting_s / 60, 1),
                    revisit_pct=round(100 * fl.revisits / max(1, fl.rooms_entered)),
                    kills_by_daylight={p: fl.phase_kills.get(p, 0) for p in fl.phase_s})
-    out["members"] = {n: {"exp": m.exp, "deaths": m.deaths, "flees": m.flees, "levels": m.levels,
+    out["members"] = {n: {"exp": m.exp, "growth_levels": round(m.progress, 4), "death_cost_levels": round(m.death_cost, 4),
+                          "deaths": m.deaths, "flees": m.flees, "levels": m.levels,
                           "lowest_hp_pct": None if m.min_hp_pct is None else round(m.min_hp_pct),
                           "lowest_mv_pct": None if m.min_mv_pct is None else round(m.min_mv_pct),
                           "apart_from_leader_min": round(m.apart_s / 60, 1),
@@ -88,6 +94,7 @@ class Strategist:
     knobs: Callable[[], dict[str, Any]]                # knob table with current values
     world: Callable[[], list[dict[str, Any]]]          # zones for the party's level
     zone_of_leader: Callable[[], int | None]
+    span: Callable[[str, int], int | None] | None = None      # (agent, level) -> exp span, for growth
     clock: Callable[[], float] = time.time
     notes_path: Path | None = None
     every_s: float = 1800.0
@@ -173,7 +180,7 @@ class Strategist:
         ctx: dict[str, Any] = {
             "why_now": reasons,
             "party": self.view(),
-            "last_30_minutes": summarize(list(self._events)),
+            "last_30_minutes": summarize(list(self._events), self.span),
             "zones_for_party_level": self.world(),
             "knobs": self.knobs(),
             "current_overrides": ov.show()["layers"],

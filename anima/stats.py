@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Iterable
+from typing import Callable, Iterable
 
 from anima.protocol.envelope import Event
 
@@ -39,6 +39,9 @@ class Member:
     apart_s: float = 0.0
     known_s: float = 0.0
     hours: float | None = None   # own observed time when members have separate clocks
+    progress: float = 0.0        # net levels gained: exp / span of the level it was gained at, minus deaths
+    death_cost: float = 0.0      # levels lost to deaths (fight.c:323: a death costs half of all experience)
+    exp_unscaled: int = 0        # exp that could not be scaled (level or class unknown)
 
 
 @dataclass
@@ -53,6 +56,14 @@ class Stats:
     follows: dict[str, int] = field(default_factory=dict)
     flow: "Flow | None" = None
     animus: "AnimusCost | None" = None
+
+    @property
+    def progress_per_hour(self) -> float | None:
+        """The party's growth: mean net levels per member per hour (None if nothing could be scaled)."""
+        ms = [m for m in self.members.values() if m.progress or m.death_cost]
+        if not ms:
+            return None
+        return sum(m.progress for m in self.members.values()) / len(self.members) / max(self.hours, 1e-9)
 
     @property
     def unknown_ratio(self) -> float:
@@ -211,7 +222,11 @@ def _room_key(ev: Event):
     return None                                   # room.dark: we do not know where we are
 
 
-def compute(events: Iterable[Event], shared_clock: bool = True, window_min: float = 10.0) -> Stats:
+Span = Callable[[str, int], "int | None"]        # (agent, level) -> exp between that level and the next
+
+
+def compute(events: Iterable[Event], shared_clock: bool = True, window_min: float = 10.0,
+            span: Span | None = None) -> Stats:
     evs = sorted(events, key=lambda e: e.t)
     members: dict[str, Member] = {}
     deaths: list[tuple[float, str, str]] = []
@@ -219,6 +234,12 @@ def compute(events: Iterable[Event], shared_clock: bool = True, window_min: floa
     follows: dict[str, int] = defaultdict(int)
     named_leader: str | None = None
     room: dict[str, object] = {}
+    level: dict[str, int] = {}
+    exp_total: dict[str, int] = {}
+
+    def scale(agent: str, amount: float) -> float | None:
+        s = span(agent, level[agent]) if span and level.get(agent) else None
+        return amount / s if s else None
 
     def m(name: str) -> Member:
         if name not in members:
@@ -237,15 +258,37 @@ def compute(events: Iterable[Event], shared_clock: bool = True, window_min: floa
         elif ev.type == "command.refused":
             me.refused[d.get("reason", "?")] += 1
         elif ev.type == "exp.gain":
-            me.exp += int(d.get("amount") or 0)
+            amount = int(d.get("amount") or 0)
+            me.exp += amount
+            if ev.agent in exp_total:
+                exp_total[ev.agent] += amount
+            lv = scale(ev.agent, amount)
+            if lv is None:
+                me.exp_unscaled += amount
+            else:
+                me.progress += lv
         elif ev.type == "self.died":
             me.deaths += 1
+            if ev.agent in exp_total:
+                lost = exp_total[ev.agent] // 2
+                exp_total[ev.agent] -= lost
+                lv = scale(ev.agent, lost)
+                if lv is not None:
+                    me.death_cost += lv
+                    me.progress -= lv
         elif ev.type == "self.fled":
             me.flees += 1
         elif ev.type == "self.flee_failed":
             me.flee_failed += 1
         elif ev.type == "level.up":
             me.levels += int(d.get("levels") or 1)
+            if ev.agent in level:
+                level[ev.agent] += int(d.get("levels") or 1)
+        elif ev.type == "char.score":
+            if d.get("level"):
+                level[ev.agent] = int(d["level"])
+            if d.get("exp") is not None:
+                exp_total[ev.agent] = int(d["exp"])
         elif ev.type == "combat.death":
             me.deaths_seen += 1
             deaths.append((ev.t, str(d.get("who", "")).lower(), ev.agent))
@@ -385,6 +428,8 @@ def render(st: Stats, window_min: float | None = None) -> str:
     lines = [
         f"duration {st.hours:.2f} h{'' if st.shared_clock else ' (estimated from day/night messages)'}"
         f"   leader {st.leader or '?'}   day/night seen: {_phases(st.phases)}",
+        (f"growth {st.progress_per_hour:+.3f} levels/h per member (exp scaled by each level's span, deaths subtracted)"
+         if st.progress_per_hour is not None else "growth: not scaled (no level table or levels unknown)"),
         f"kills {len(st.kills)} ({len(st.kills) / h:.1f}/h)   unknown ratio {st.unknown_ratio:.2%}",
         f"stretches ≥{GAP_S / 60:.0f} min without a kill: {len(st.gaps)}"
         + (" — " + ", ".join(f"+{a / 60:.0f}m for {d / 60:.1f}m" for a, d in st.gaps) if st.gaps else "")
@@ -392,7 +437,7 @@ def render(st: Stats, window_min: float | None = None) -> str:
         "stretches without a kill: not measured (estimated clock: sessions without two day/night messages"
         " have no time of their own)",
         "",
-        f"{'member':10} {'exp/h':>8} {'die':>4} {'flee':>5} {'lvl':>4} {'cmds':>6} {'refused':>8}"
+        f"{'member':10} {'lvl/h':>7} {'d.cost':>6} {'exp/h':>8} {'die':>4} {'flee':>5} {'lvl':>4} {'cmds':>6} {'refused':>8}"
         f" {'kills seen':>11} {'apart':>8} {'min HP':>11} {'min MV':>11}",
     ]
     lead_seen = st.members[st.leader].deaths_seen if st.leader in st.members else 0
@@ -405,7 +450,7 @@ def render(st: Stats, window_min: float | None = None) -> str:
         else:
             apart = f"{mem.apart_s / 60:.1f}m"
         lines.append(
-            f"{name:10} {mem.exp / max(mem.hours or h, 1e-9):8.0f} {mem.deaths:4d} {mem.flees:5d} {mem.levels:4d} {mem.commands if st.shared_clock else '-':>6}"
+            f"{name:10} {mem.progress / max(mem.hours or h, 1e-9):+7.3f} {mem.death_cost:6.2f} {mem.exp / max(mem.hours or h, 1e-9):8.0f} {mem.deaths:4d} {mem.flees:5d} {mem.levels:4d} {mem.commands if st.shared_clock else '-':>6}"
             f" {refused:8d} {seen:>11} {apart:>8} {_fmt_min(mem.min_hp, mem.min_hp_pct):>11}"
             f" {_fmt_min(mem.min_mv, mem.min_mv_pct):>11}")
     reasons: dict[str, int] = defaultdict(int)

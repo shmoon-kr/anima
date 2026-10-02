@@ -1,4 +1,5 @@
 """`anima stats`: the same numbers from an Anima recording and from a replayed tintin log."""
+import pytest
 from anima.protocol.envelope import Event
 from anima.stats import compute, game_clock, merge
 
@@ -83,3 +84,14 @@ def test_leader_waiting_for_a_resting_member_and_revisits():
     assert (fl.idle_s, fl.waiting_s) == (300.0, 180.0)
     assert (fl.rooms_entered, fl.revisits) == (3, 1)
     assert [round(w.get("waiting_s", 0)) for w in fl.windows] == [180, 0, 0]
+
+
+def test_growth_is_exp_over_the_level_span_and_a_death_costs_half_of_all_exp():
+    span = lambda agent, level: 10_000                      # noqa: E731
+    evs = [ev(0, "A", "char.score", level=5, exp=50_000),
+           ev(10, "A", "exp.gain", amount=1_000, kind="solo"),
+           ev(20, "A", "self.died"),
+           ev(3600, "A", "prompt", hp=1, mp=1, mv=1)]
+    m = compute(evs, span=span).members["A"]
+    assert m.death_cost == pytest.approx(2.55)              # (50k + 1k) / 2 over a 10k span
+    assert m.progress == pytest.approx(0.1 - 2.55)

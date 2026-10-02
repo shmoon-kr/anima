@@ -304,6 +304,27 @@ def _sigil(args: argparse.Namespace) -> int:
     return 1 if bad else 0
 
 
+def _level_span():
+    """(agent, level) -> exp span, from third_party/tbamud/level_exp.yaml and the party's `classes` policy."""
+    import yaml
+    table_path = Path("third_party/tbamud/level_exp.yaml")
+    if not table_path.exists():
+        return None
+    table = {c: {int(k): int(v) for k, v in t.items()} for c, t in (yaml.safe_load(table_path.read_text()) or {}).items()}
+    classes: dict = {}
+    from anima.sigil.program import SigilError, load_agent
+    for m in sorted(Path("agents").glob("*.yaml")):
+        try:
+            classes.update(load_agent(m, Path("packages")).policies.get("classes") or {})
+        except SigilError:
+            continue
+
+    def span(agent: str, level: int):
+        t = table.get(classes.get(agent, ""))
+        return max(1, t[level + 1] - t[level]) if t and level in t and level + 1 in t else None
+    return span
+
+
 def _stats(args: argparse.Namespace) -> int:
     from anima.stats import compute, game_clock, merge, render
 
@@ -314,10 +335,11 @@ def _stats(args: argparse.Namespace) -> int:
             t0 = min(ev.t for ev in events) + 60 * (args.since or 0)
             t1 = t0 + 60 * args.minutes if args.minutes else float("inf")
             events = [ev for ev in events if t0 <= ev.t < t1]
-        print(render(compute(events, window_min=args.by_window or 10.0), args.by_window))
+        print(render(compute(events, window_min=args.by_window or 10.0, span=_level_span()), args.by_window))
         return 0
     from anima.adapters.tbamud_text.replay import replay_file
-    parts = [compute(game_clock(list(replay_file(p, keep_raw=False))), shared_clock=False)
+    span = _level_span()
+    parts = [compute(game_clock(list(replay_file(p, keep_raw=False))), shared_clock=False, span=span)
              for p in args.paths]
     print(render(merge(parts)))
     return 0

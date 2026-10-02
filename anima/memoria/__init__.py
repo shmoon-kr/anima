@@ -26,11 +26,25 @@ class Memoria:
         self.night = False
         self.above_level_zones: set[int] = set()
         self._closed: dict[str, tuple[int, str, float]] = {}
+        self.level_exp: dict[str, dict[int, int]] = {}      # class -> level -> total exp to reach it
+
+    def level_span(self, chclass: str | None, level: int | None) -> int | None:
+        """Experience between this level and the next (None if unknown). Progress = exp / span."""
+        t = self.level_exp.get(chclass or "")
+        if not t or not level or level + 1 not in t or level not in t:
+            return None
+        return max(1, t[level + 1] - t[level])
 
     @classmethod
     def from_tbamud(cls, world_dir: Path, hazards_path: Path | None = None) -> "Memoria":
         from anima.memoria.importers.tbamud import load_world
-        return cls(load_world(world_dir), Hazards.from_yaml(hazards_path) if hazards_path else None)
+        mem = cls(load_world(world_dir), Hazards.from_yaml(hazards_path) if hazards_path else None)
+        table = hazards_path.parent / "level_exp.yaml" if hazards_path else None
+        if table is not None and table.exists():
+            import yaml
+            mem.level_exp = {c: {int(k): int(v) for k, v in t.items()}
+                             for c, t in (yaml.safe_load(table.read_text()) or {}).items()}
+        return mem
 
     def locator(self, agent: str) -> Locator:
         if agent not in self.locators:

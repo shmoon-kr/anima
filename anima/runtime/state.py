@@ -30,6 +30,7 @@ class AgentState:
     rest_need: float = 0.0          # 0..1, strongest need among `camp: true` behaviors (party camp, D30)
     shop_wants: list = field(default_factory=list)   # shop rooms (and the fountain) worth a trip for me (D32, D33)
     thirsty_since: float = NEVER
+    exp: int | None = None          # total experience: from score, plus gains, halved by a death (fight.c:323)
     hungry: bool = False
     thirsty: bool = False
     has_light: bool = False
@@ -88,10 +89,15 @@ class AgentState:
             self.in_game = True
         elif t == "char.vitals_max":
             self.hp_max, self.mp_max, self.mv_max = d.get("hp"), d.get("mp"), d.get("mv")
+        elif t == "exp.gain":
+            if self.exp is not None:
+                self.exp += int(d.get("amount") or 0)
         elif t == "char.score":
             self.level = d.get("level", self.level)
             self.gold = d.get("gold", self.gold)
             self.practices = d.get("practices", self.practices)
+            if d.get("exp") is not None:
+                self.exp = d["exp"]
         elif t == "char.skills":
             self.skills.update(d.get("skills", {}))
         elif t == "char.practiced":
@@ -163,6 +169,8 @@ class AgentState:
             self.last_fight_t = NEVER
         elif t == "self.died":
             self.last_died_t = now
+            if self.exp is not None:
+                self.exp -= self.exp // 2           # fight.c die(): gain_exp(ch, -(GET_EXP(ch) / 2))
             self.last_fight_t = NEVER
             self.in_game = False
             self.has_light = False

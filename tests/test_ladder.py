@@ -56,3 +56,22 @@ def test_risk_survives_a_restart(ladder, memoria_proto):
     again = Ladder(memoria_proto, hub=ladder.hub, clock=ladder.clock)
     again.from_json(ladder.to_json())
     assert again.blocked(8) == ladder.blocked(8)
+
+
+def test_zones_are_ranked_by_growth_and_measured_growth_takes_over(ladder):
+    lv = [8, 8, 7, 7, 8, 9]
+    first = ladder.candidates(lv, span=75000)
+    assert first[0].name == "Miden'Nir" and first[0].expected_growth > first[1].expected_growth
+    z = first[0].zone
+    ladder.spent(z, 1800)                                   # half an hour there, almost nothing learned
+    ladder.gained(z, 0.001)
+    again = ladder.candidates(lv, span=75000)
+    assert again[0].zone != z and next(f for f in again if f.zone == z).measured
+
+
+def test_a_death_counts_against_the_zone_growth(ladder):
+    z = ladder.candidates([8, 8, 8], span=75000)[0].zone
+    ladder.spent(z, 1800)
+    ladder.gained(z, 0.2)
+    ladder.gained(z, -0.5)                                  # half of everything, on the level's scale
+    assert ladder.growth(z, 0, 75000, 3)[0] < 0
