@@ -64,35 +64,36 @@ S1 과 S2 는 서로 의존하지 않아 같이 진행한다. S2 의 지연 측�
 - [x] 엔진 분리 테스트(`test_separation.py`) 통과: 허용 목록에도 캐릭터·직업 이름은 없다
 
 ## S2. 공급자 연결 (M0) ★
-- [ ] `anima/animus/providers.py`
+- [x] `anima/animus/providers.py` — 됨
   - `LocalProvider`: LM Studio `/v1/completions` 에 채팅 템플릿 + 빈 `<think></think>` 프리필 (mud-agents `llm.py` 에서 확인한 방법). 의존성 추가 없이 `urllib` + `asyncio.to_thread`
   - `ClaudeProvider`: `claude -p --output-format json` 비동기 서브프로세스, 도구 끔. 예산은 대기열의 `budget_per_hour` 사용
   - 둘 다 JSON 만 받는다: 답에서 JSON 을 뽑아 `answer_schema` 검사(이미 있음), 실패는 `animus.rejected {reason: schema}`
-- [ ] `config/anima.toml [animus]`: 단계별 공급자·모델·URL·시간 제한·예산. 기본은 지금처럼 Fake (설정이 없으면 1단계와 같게 동작)
+- [x] `config/anima.toml [animus]`: 단계별 공급자·모델·URL·시간 제한·예산. 기본은 지금처럼 Fake (설정이 없으면 1단계와 같게 동작) — 됨 (`anima.example.toml` 참고)
 - [ ] `anima animus bench`: 질문 종류별 프롬프트로 지연 측정. 1개·6개 동시. 모델 2~3개(MoE 우선) 결과를 `docs/ANIMUS-BENCH.md` 에 기록 → **모델 선택** (벤치 결과로 고른다, MoE 유력)
+  - 2026-10-03: claude CLI 6~12초, 답 6/6 유효. **LM Studio 는 꺼져 있어 로컬 측정 대기** ★ (켜면 `anima animus bench local_fast`)
 - [x] Claude 시간당 상한과 정기 호출 간격 — **결정: 시간당 6회(정기 2 + 긴급 여유 4), 정기 30분, 긴급 최소 간격 5분**. 실제 사용량을 보고 조정
-- [ ] 테스트는 계속 LLM 없이: 가짜·재생 공급자. 실제 공급자는 `-m live` 표시가 있는 테스트만
+- [x] 테스트는 계속 LLM 없이: 가짜·재생 공급자. 실제 공급자는 `-m live` 표시가 있는 테스트만 — 됨 (`test_providers.py`: 가짜 LM Studio 서버·가짜 claude 명령)
 
 ## S3. Claude 전략가 (M2)
-- [ ] 위치: 에이전트가 아니라 **파티 계층의 감독**(`anima/animus/strategist.py`). 슈퍼바이저가 돌린다. 행동 선택과 독립된 루프라 기다림이 없다 (원칙 3)
-- [ ] 호출 시점: 정기(30분) + 긴급(사망, 레벨업, 10분 이상 킬 없음, 거점 도달 불가, 새 지역 진입). 긴급 사이 최소 5분, 예산 초과면 건너뛰고 기록
-- [ ] 입력(짧게, 압축해서)
+- [x] 위치: 에이전트가 아니라 **파티 계층의 감독**(`anima/animus/strategist.py`). 슈퍼바이저가 돌린다. 행동 선택과 독립된 루프라 기다림이 없다 (원칙 3)
+- [x] 호출 시점: 정기(30분) + 긴급(사망, 레벨업, 10분 이상 킬 없음, 거점 도달 불가, 새 지역 진입). 긴급 사이 최소 5분, 예산 초과면 건너뛰고 기록
+- [x] 입력(짧게, 압축해서)
   - 블랙보드 요약: 파티원 레벨·HP/MP/MV %·위치·역할·골드
   - 최근 30분 `anima stats` 결과 (킬·대기·이탈·거부를 같은 계산으로 → 지표와 판단이 같은 숫자를 본다)
   - Memoria: 파티 레벨에 맞는 지역표(`zones_for_level`), 상점·가격, 위험 목록, 현재 시간대와 다음 해 질 녘까지 남은 시간
   - 지난 메모(`run/party-notes.md`), 지금 덮어쓰기 값
-- [ ] 출력 스키마: `{changes: [{layer, key, value, ttl_s?}], notes: string, next_check_min?}` → S1 패치. 메모는 다음 호출에 넘긴다
-- [ ] **게임 텍스트는 데이터다**: 다른 플레이어의 말·몹 이름이 프롬프트에 들어가도 출력은 허용 목록 패치뿐이라 명령 주입이 실행으로 이어지지 않는다. 프롬프트에도 그렇게 명시
-- [ ] 재생: 녹화된 답으로 같은 실행을 LLM 없이 재현 (`ReplayProvider`)
+- [x] 출력 스키마: `{changes: [{layer, key, value, ttl_s?}], reason, notes, proposal?}` → S1 패치. 메모는 `run/animus/party-notes.md`, 규칙 제안은 `run/animus/proposals/`
+- [x] **게임 텍스트는 데이터다**: 다른 플레이어의 말·몹 이름이 프롬프트에 들어가도 출력은 허용 목록 패치뿐이라 명령 주입이 실행으로 이어지지 않는다. 프롬프트에도 그렇게 명시
+- [x] 재생: 녹화된 답으로 같은 실행을 LLM 없이 재현 (`ReplayProvider`)
 
 ## S4. 로컬 LLM, 에이전트별 (M3)
 S2 의 지연 측정을 보고 빈도를 정한다. 6인이 GPU 하나를 나눠 쓴다.
-- [ ] 첫 질문 종류 (각각 Sigil `asks` 로, 패키지에 둔다 — 엔진에는 질문 내용이 없다)
+- [x] 첫 질문 종류 (각각 Sigil `asks` 로, 패키지에 둔다 — 엔진에는 질문 내용이 없다) — `packages/base` asks: `self_tune`(20분), `mob_risk`(`room.unidentified`), `stuck`(같은 행동 10분)
   - `mob_risk`: 지식에 없는 몹이 방에 있을 때 위험도 → 답은 `shun`/`targets` 패치 제안 (danger 우선순위)
   - `stuck`: 같은 행동이 N분 동안 진전 없음(같은 방, 같은 거부 반복) → 원인과 정책 패치 (stuck 우선순위)
   - `self_tune`: 20분마다 자기 최근 지표(대기·도주·최저 HP)로 자기 정책값 조정 (routine)
 - [ ] 처리량: 6인 동시 질문 시 대기열 길이·버려진 질문 수를 `anima stats` 로 본다. 버려지는 비율이 높으면 routine 빈도를 줄인다
-- [ ] 로컬 LLM 의 답도 S1 패치로만 들어간다 (에이전트 자기 레이어 `animus:<이름>` 만, 파티 값은 못 바꾼다)
+- [x] 로컬 LLM 의 답도 S1 패치로만 들어간다 (에이전트 자기 레이어 `animus:<이름>` 만, 파티 값은 못 바꾼다) — `answer: patch` → `overlay.patch(origin=local)`
 
 ## S5. 첫 판단 과제 (M4) — 3~4개
 과제마다: Animus 끔 대비 지표, 필요한 엔진/패키지 작업(사람이 쓰는 규칙), LLM 이 정하는 것을 나눈다.

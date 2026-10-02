@@ -47,6 +47,8 @@ cp config/anima.example.toml config/anima.toml        # path to your local tbaMU
 .venv/bin/anima reload           # reload Sigil packages into running agents (a failing one keeps the old program)
 .venv/bin/anima stop             # quit the game cleanly
 .venv/bin/anima stats recordings/<file>.jsonl     # kills, deaths, flees, separation ... (also works on tintin logs)
+.venv/bin/anima animus show       # phase 2: values the LLM layers changed; history | revert ID | off | on | set
+.venv/bin/anima animus bench claude   # provider latency (config/anima.toml [animus] picks providers per tier)
 .venv/bin/pytest -q              # world-file tests need ANIMA_TBAMUD_WORLD or config path
 ```
 
