@@ -295,7 +295,7 @@ class _Validator:
     def behavior(self, it: Item) -> None:
         s = it.spec
         self.allowed(it, {"weight", "when", "considerations", "targets", "do", "task", "every_s", "cooldown_s",
-                          "retry_s", "delay_s", "description", "animus_weight"})
+                          "retry_s", "delay_s", "description", "animus_weight", "camp"})
         if "animus_weight" in s:
             for e in check_weight_spec(it.id, s["animus_weight"]):
                 self.err(it.id, e)

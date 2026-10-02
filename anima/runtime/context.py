@@ -37,7 +37,11 @@ class SoloParty:
         return {"leader": agent, "is_leader": True, "size": 1, "here": 1, "all_here": True, "lost_secs": 0,
                 "resting": False, "rally": None, "role": "", "leader_room": None, "leader_vnum": None,
                 "with_leader": True, "following": False, "in_group": False, "online": 1, "min_mv_pct": 100, "unseen_here": 0, "all_following": True,
-                "thirsty_in_room": [], "hungry_in_room": []}.get(field)
+                "thirsty_in_room": [], "hungry_in_room": [], "camping": False, "sentry": None,
+                "is_sentry": False}.get(field)
+
+    def sleepers_here(self, agent: str) -> list[str]:
+        return []
 
     def members_in_room(self, agent: str) -> list[dict[str, Any]]:
         return []
@@ -225,7 +229,7 @@ class Context:
         for name, fn in {
             "send": self.a_send, "attack": self.a_attack, "use": self.a_use, "cast": self.a_cast,
             "flee": lambda: self.cmd("flee"), "rest": self.a_rest, "sleep": self.a_sleep, "stand": self.a_stand,
-            "wake": self.a_wake, "eat": self.a_eat, "drink": self.a_drink,
+            "wake": self.a_wake, "wake_party": self.a_wake_party, "eat": self.a_eat, "drink": self.a_drink,
             "practice": lambda skill: self.cmd(f"practice {skill}"),
             "go_to": self.a_go_to, "go_back": self.a_go_back, "explore": self.a_explore,
             "ensure_toggle": self.a_toggle, "set_wimpy": self.a_wimpy,
@@ -359,6 +363,13 @@ class Context:
 
     def a_wake(self, who: str | None = None) -> None:
         self.cmd(f"wake {who}" if who else "wake")
+
+    def a_wake_party(self) -> None:
+        """Wake every sleeping party member in my room (act.movement.c do_wake: only while I am awake)."""
+        if self.state.position == "sleeping":
+            self.cmd("wake")
+        for name in self.party.sleepers_here(self.agent):
+            self.cmd(f"wake {name}")
 
     def _inventory_of(self, kind: str) -> str | None:
         k = self.memoria.knowledge

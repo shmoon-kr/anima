@@ -27,13 +27,16 @@ class PartyBoard:
     save_path: Any = None                                       # where the current rally survives restarts
     clock: Callable[[], float] = time.monotonic
     states: dict[str, Any] = field(default_factory=dict)        # name -> AgentState
+    camp_start: float = 0.5                                     # D30: a member's rest need that makes the room camp
     _apart_since: dict[str, float] = field(default_factory=dict)
+    _camps: dict[Any, str | None] = field(default_factory=dict)  # room -> sentry while that room camps
 
     @classmethod
     def from_policies(cls, memoria: Memoria, policies: dict[str, Any], clock: Callable[[], float] = time.monotonic):
         return cls(memoria, list(policies.get("roster", [])), policies.get("leader", ""),
                    {k: list(v) for k, v in (policies.get("roles") or {}).items()}, policies.get("rally"),
-                   dict(policies.get("classes") or {}), list(policies.get("circuit") or []), clock=clock)
+                   dict(policies.get("classes") or {}), list(policies.get("circuit") or []), clock=clock,
+                   camp_start=float(policies.get("camp_start", 0.5)))
 
     def next_rally(self, agent: str) -> str | None:
         """The leader moves the party's hunting ground to the next place in the circuit."""
@@ -78,6 +81,32 @@ class PartyBoard:
         return [n for n in self.online()
                 if v is not None and self.vnum(n) == v and (n == agent or n in seen)]
 
+    # ------------------------------------------------------------ camp (D30)
+    def camp(self, agent: str) -> str | None:
+        """The sentry if the members in my room are camping, else None.
+
+        A camp starts when one member's rest need reaches camp_start and ends when nobody in the
+        room needs rest. Then everyone recovers at once instead of one after another. The sentry,
+        the member with the most hit points when the camp starts, rests awake; the rest sleep."""
+        here = self.in_room_with(agent)
+        key = self.vnum(agent)
+        if key is None or not here:
+            return None
+        needs = {n: getattr(self.states[n], "rest_need", 0.0) for n in here}
+        if key not in self._camps:
+            if max(needs.values()) < self.camp_start:
+                return None
+            self._camps[key] = None
+        elif max(needs.values()) <= 0.0:
+            del self._camps[key]
+            return None
+        if self._camps[key] not in here:
+            self._camps[key] = max(here, key=lambda n: (self.states[n].hp or 0, n))
+        return self._camps[key]
+
+    def sleepers_here(self, agent: str) -> list[str]:
+        return [n for n in self.in_room_with(agent) if n != agent and self.states[n].position == "sleeping"]
+
     def is_party_member(self, name: str) -> bool:
         return name in self.roster
 
@@ -120,7 +149,8 @@ class PartyBoard:
             return {"leader": agent, "is_leader": True, "size": 1, "here": 1, "all_here": True,
                     "lost_secs": 0, "resting": False, "rally": None, "role": "", "leader_room": None,
                     "with_leader": True, "leader_vnum": None, "min_mv_pct": 100, "unseen_here": 0, "all_following": True, "following": False, "in_group": False, "online": 1,
-                    "thirsty_in_room": [], "hungry_in_room": []}.get(f)
+                    "thirsty_in_room": [], "hungry_in_room": [], "camping": False, "sentry": None,
+                    "is_sentry": False}.get(f)
         here = self.in_room_with(agent)
         st = self.states.get(agent)
         if f == "leader":
@@ -146,6 +176,12 @@ class PartyBoard:
             return self.lost_secs()
         if f == "resting":
             return any(self.states[n].position in ("resting", "sleeping") for n in here if n != agent)
+        if f == "camping":
+            return self.camp(agent) is not None
+        if f == "sentry":
+            return self.camp(agent)
+        if f == "is_sentry":
+            return self.camp(agent) == agent
         if f == "rally":
             return self.rally
         if f == "role":

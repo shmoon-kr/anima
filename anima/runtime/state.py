@@ -27,6 +27,7 @@ class AgentState:
     gold: int = 0
     practices: int = 0
     position: str = "standing"
+    rest_need: float = 0.0          # 0..1, strongest need among `camp: true` behaviors (party camp, D30)
     hungry: bool = False
     thirsty: bool = False
     has_light: bool = False
@@ -146,8 +147,8 @@ class AgentState:
                 self.hit_seen[d["victim"]] = now
             if SELF in (d.get("attacker"), d.get("victim")):
                 self.last_fight_t = now
-                if self.position == "sleeping":
-                    self.position = "sitting"       # hits wake you (fight.c update_pos)
+                # a hit does NOT wake a sleeper (fight.c update_pos keeps POS_SLEEPING while hp > 0):
+                # the position stays, so the wake_when_hit reflex sees "sleeping" and sends wake + stand
         elif t == "combat.death":
             if now - self.last_fight_t < FIGHT_WINDOW_S:
                 self.last_kill_t = now

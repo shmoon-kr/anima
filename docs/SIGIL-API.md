@@ -53,6 +53,9 @@
 | `party.all_here` | bool | 명단 전원이 같은 방 |
 | `party.lost_secs` | number | 가장 오래 떨어져 있는 파티원의 이탈 시간 (없으면 0) |
 | `party.resting` | bool | 같은 방 파티원 중 누가 쉬는 중 |
+| `party.camping` | bool | 내 방의 파티가 야영 중 (한 명의 휴식 필요가 camp_start 에 닿으면 시작, 아무도 필요 없으면 끝, D30) |
+| `party.sentry` | text | 야영 중 보초 이름 (시작할 때 체력이 가장 많은 파티원, 야영 동안 고정). 야영이 아니면 null |
+| `party.is_sentry` | bool | 내가 보초 |
 | `party.rally` | text | 집결지 방 이름 |
 | `party.members_in_room` | list | 같은 방 파티원 (targets 용) |
 | `party.role` | text | 역할 배정에서 받은 내 역할 이름들 (쉼표) |
@@ -139,6 +142,7 @@
 | `sleep()` | 자기 |
 | `stand()` | 일어서기 (자면 깨고 일어섬) |
 | `wake(who)` | 깨우기. who 생략 시 자기 |
+| `wake_party()` | 같은 방에서 자는 파티원을 모두 깨운다 (내가 자면 나부터) |
 | `eat()` | 가진 음식 먹기 |
 | `drink()` | 가진 물통이나 방 분수대에서 마시기 |
 | `practice(skill)` | 연습 |

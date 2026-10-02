@@ -89,15 +89,19 @@ class UtilitySelector:
     def evaluate(self) -> list[Choice]:
         out = []
         inertia = float(self.ctx.program.policies.get("inertia", DEFAULT_INERTIA))
+        need = 0.0
         for item in self.ctx.program.behaviors.values():
             try:
                 c = self.score(item)
             except (ExprError, KeyError, TypeError, ValueError) as e:
                 self.errors.append(f"{item.id}: {e}")
                 c = Choice(item, 0.0)
+            if item.spec.get("camp") and c.score > 0:   # D30: how much I need to rest, whatever I chose
+                need = max(need, min(1.0, c.score / max(1e-9, float(item.spec.get("weight", 1.0)))))
             if self.current and c.item.name == self.current.item.name and c.score > 0:
                 c.score += inertia
             out.append(c)
+        self.ctx.state.rest_need = need
         out.sort(key=lambda c: -c.score)
         return out
 

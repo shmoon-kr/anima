@@ -12,6 +12,7 @@ Key format for patches: `policy.NAME`, `weight.BEHAVIOR`.
 
 | key | type | range | scope | declared in | package value | agents |
 |---|---|---|---|---|---|---|
+| `policy.camp_start` | number | 0.2..1.0, step ≤ 0.2 | party | party-midgaard | 0.5 | all |
 | `policy.circuit` | rooms | ≤ 4 entries | party | party-midgaard | 2 entries | all |
 | `policy.danger` | words | ≤ 40 entries | party or agent, grow only | base | 5 entries | all |
 | `policy.flee_pct` | number | 15..50, step ≤ 10 | party or agent | base | 40 / 45 | all |

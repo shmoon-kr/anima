@@ -144,6 +144,7 @@ behaviors:
     every_s: 5
   rest:
     weight: 0.9
+    camp: true                        # 이 필요가 파티 야영을 시작·유지한다 (D30)
     when: "not self.fighting and self.secs_since_alert > 20"
     considerations:
       # 기준 아래로 떨어지면 쉬기 시작해 체력 90% 까지 쉰다 (히스테리시스)
@@ -152,6 +153,7 @@ behaviors:
     every_s: 10
   sleep:                              # 잠은 회복 +50% (쉬기 +25%): 방이 안전할 때만
     weight: 0.95
+    camp: true                        # 이 필요가 파티 야영을 시작·유지한다 (D30)
     when: "not self.fighting and self.secs_since_alert > 20 and not room.dark and len(room.strangers) == 0"
     considerations:
       - "max(max(inverse_linear(self.hp_pct, policy.rest_pct, 90), inverse_linear(self.mp_pct, policy.rest_mp_pct, 90)), max(max(below(self.mv, policy.rest_mv), below(self.mv_pct, policy.rest_mv_pct)), bool(self.behavior == 'sleep' and (self.hp_pct < 90 or self.mv_pct < 60))))"

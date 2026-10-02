@@ -16,12 +16,34 @@ policies:
   rally: "The Entrance To The Newbie Zone"
   leash: 20
   circuit: ["The Entrance To The Newbie Zone", "The End Of The Path"]
+  camp_start: 0.5                     # 한 명의 휴식 필요(0~1)가 이만큼이면 같은 방 파티가 야영 (D30)
 animus:
   policies:                           # 파티 값: animus:party 레이어(전략가)만 바꿀 수 있다
     rally:   {type: room, party: true}
     circuit: {type: rooms, party: true, max_len: 4}
     leash:   {type: number, min: 5, max: 40, step: 10, party: true}
+    camp_start: {type: number, min: 0.2, max: 1.0, step: 0.2, party: true}
 behaviors:
+  # 야영 (D30): 한 명이 쉬어야 하면 어차피 아무도 못 움직이니 같이 회복한다.
+  # 보초(체력이 가장 많은 파티원)는 깨어서 쉬고, 나머지는 잠(회복 +50%). 위험하면 보초가 모두 깨운다.
+  camp_sleep:
+    weight: 0.89                      # 따라붙기·보급(0.92~1.2)보다 낮고, 사냥·탐험(≤0.85)보다 높다
+    when: "party.camping and not party.is_sentry and not self.fighting and self.secs_since_alert > 20 and not room.dark and len(room.strangers) == 0"
+    considerations: ["bool(party.camping)"]
+    do: ["sleep()"]
+    every_s: 10
+  camp_rest:                          # 방이 안전하지 않으면 자지 말고 쉬기만
+    weight: 0.88
+    when: "party.camping and not party.is_sentry and not self.fighting and self.secs_since_alert > 20"
+    considerations: ["bool(party.camping)"]
+    do: ["rest()"]
+    every_s: 10
+  camp_watch:                         # 보초는 자지 않는다 (자는 사람은 반드시 맞고 두 배로 다친다: fight.c:885, 923)
+    weight: 0.97
+    when: "party.camping and party.is_sentry and not self.fighting and self.secs_since_alert > 20"
+    considerations: ["bool(party.is_sentry)"]
+    do: ["rest()"]
+    every_s: 10
   hand_container_to_cleric:          # 물통은 성직자 손에 있어야 채워진다 (create water 는 자기 인벤토리만)
     weight: 0.92
     when: "not self.fighting and has_item('drinkcon') and not knows('create water')"
@@ -30,3 +52,15 @@ behaviors:
                      "step(secs_since('give_failed'), 120)"]
     do: ["stand()", "send('give ' + item_of('drinkcon') + ' ' + target.name)"]
     every_s: 10
+
+reflexes:
+  sentry_raises_the_camp:             # 낯선 존재가 오면 보초가 모두 깨우고 일어선다 (깨워진 쪽은 stand_when_woken)
+    on: occupant.arrived
+    if: "party.is_sentry and party.camping and self.secs_since_alert < 2"
+    do: ["wake_party()", "stand()"]
+    cooldown_s: 10
+  sentry_raises_the_camp_on_attack:   # 누가 맞으면: 자는 사람은 맞아도 안 깬다 (fight.c update_pos)
+    on: [combat.hit, combat.aggro]
+    if: "party.is_sentry and party.camping"
+    do: ["wake_party()", "stand()"]
+    cooldown_s: 5
