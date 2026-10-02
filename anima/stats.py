@@ -54,14 +54,14 @@ class Stats:
     phases: list[str]
     shared_clock: bool
     follows: dict[str, int] = field(default_factory=dict)
+    scaled: bool = False                 # a level table and some member's level were known
     flow: "Flow | None" = None
     animus: "AnimusCost | None" = None
 
     @property
     def progress_per_hour(self) -> float | None:
         """The party's growth: mean net levels per member per hour (None if nothing could be scaled)."""
-        ms = [m for m in self.members.values() if m.progress or m.death_cost]
-        if not ms:
+        if not self.scaled or not self.members:
             return None
         return sum(m.progress for m in self.members.values()) / len(self.members) / max(self.hours, 1e-9)
 
@@ -76,6 +76,7 @@ class Flow:
     """Where the party's time went (shared clock only). Phase-2 task metrics (PHASE-2-PLAN S0)."""
     idle_s: float = 0.0               # leader had no behavior to run
     waiting_s: float = 0.0            # ... while a member was resting or sleeping (the leader waits for them)
+    leader_rest_s: float = 0.0        # the leader itself resting or sleeping (a party camp, D30)
     rooms_entered: int = 0            # leader
     revisits: int = 0                 # entered a room seen among the last REVISIT_WINDOW rooms
     gold: dict[str, tuple[int, int]] = field(default_factory=dict)       # member -> (first, last) reported
@@ -105,6 +106,7 @@ def _flow(evs: list[Event], leader: str, kills: list[float], window_s: float) ->
     resting: set[str] = set()
     recent: list[object] = []
     phase: str | None = None
+    lead_pos = "standing"
     win: dict[int, dict[str, float]] = defaultdict(lambda: defaultdict(float))
     prev_t = start
     for ev in evs:
@@ -119,10 +121,15 @@ def _flow(evs: list[Event], leader: str, kills: list[float], window_s: float) ->
                     w["waiting_s"] += dt
             if phase:
                 fl.phase_s[phase] += dt
+            if lead_pos in ("resting", "sleeping"):
+                fl.leader_rest_s += dt
+                w["rest_s"] += dt
             prev_t = ev.t
         d = ev.data
         if ev.agent == leader and ev.type == "runtime.behavior":
             behavior = d.get("to")
+        elif ev.type == "position" and ev.agent == leader:
+            lead_pos = d.get("position", lead_pos)
         elif ev.type == "position" and ev.agent != leader:
             (resting.add if d.get("position") in ("resting", "sleeping") else resting.discard)(ev.agent)
         elif ev.type == "connection.closed":
@@ -355,6 +362,7 @@ def compute(events: Iterable[Event], shared_clock: bool = True, window_min: floa
         if b - a >= GAP_S:
             gaps.append((a - start, b - a))
     st = Stats((end - start) / 3600.0, kills, gaps, members, leader, phases, shared_clock, dict(follows))
+    st.scaled = bool(span) and any(span(a, lv) for a, lv in level.items())
     if shared_clock and leader and evs:
         st.flow = _flow(evs, leader, kills, 60.0 * window_min)
         st.animus = _animus(evs)
@@ -398,6 +406,7 @@ def _render_flow(st: Stats, window_min: float | None) -> list[str]:
     fl, h = st.flow, max(st.hours, 1e-9)
     out = ["", f"leader idle {fl.idle_s / 60:.1f}m ({fl.idle_s / 36 / h:.0f}%), of which waiting for a resting member"
                f" {fl.waiting_s / 60:.1f}m ({fl.waiting_s / 36 / h:.0f}%)",
+           f"leader resting or sleeping itself {fl.leader_rest_s / 60:.1f}m ({fl.leader_rest_s / 36 / h:.0f}%)",
            f"leader moves {fl.rooms_entered}, revisits within {REVISIT_WINDOW} rooms {fl.revisits}"
            f" ({100 * fl.revisits / max(1, fl.rooms_entered):.0f}%)"]
     if fl.phase_s:
@@ -407,10 +416,10 @@ def _render_flow(st: Stats, window_min: float | None) -> list[str]:
     if fl.gold:
         out.append("gold: " + ", ".join(f"{n} {a}→{b} ({b - a:+d})" for n, (a, b) in sorted(fl.gold.items())))
     if window_min:
-        out += ["", f"{'window':>8} {'kills':>6} {'exp':>7} {'idle':>6} {'waiting':>8}"]
+        out += ["", f"{'window':>8} {'kills':>6} {'exp':>7} {'idle':>6} {'waiting':>8} {'camp':>6}"]
         for i, w in enumerate(fl.windows):
             out.append(f"{f'+{i * window_min:.0f}m':>8} {w.get('kills', 0):6.0f} {w.get('exp', 0):7.0f}"
-                       f" {w.get('idle_s', 0) / 60:5.1f}m {w.get('waiting_s', 0) / 60:7.1f}m")
+                       f" {w.get('idle_s', 0) / 60:5.1f}m {w.get('waiting_s', 0) / 60:7.1f}m {w.get('rest_s', 0) / 60:5.1f}m")
     ac = st.animus
     if ac and (ac.requests or ac.patches):
         lat = (f", latency median {_pct(ac.latency_s, .5):.1f}s p90 {_pct(ac.latency_s, .9):.1f}s"
@@ -429,7 +438,7 @@ def render(st: Stats, window_min: float | None = None) -> str:
         f"duration {st.hours:.2f} h{'' if st.shared_clock else ' (estimated from day/night messages)'}"
         f"   leader {st.leader or '?'}   day/night seen: {_phases(st.phases)}",
         (f"growth {st.progress_per_hour:+.3f} levels/h per member (exp scaled by each level's span, deaths subtracted)"
-         if st.progress_per_hour is not None else "growth: not scaled (no level table or levels unknown)"),
+         if st.progress_per_hour is not None else "growth: not scaled (no level table or no member's level known)"),
         f"kills {len(st.kills)} ({len(st.kills) / h:.1f}/h)   unknown ratio {st.unknown_ratio:.2%}",
         f"stretches ≥{GAP_S / 60:.0f} min without a kill: {len(st.gaps)}"
         + (" — " + ", ".join(f"+{a / 60:.0f}m for {d / 60:.1f}m" for a, d in st.gaps) if st.gaps else "")
