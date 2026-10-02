@@ -9,6 +9,7 @@ behaviors:
     do: ["stand()", "send('group new')", "ensure_toggle('autoassist', true)"]
     every_s: 10
   hunt:                                # 도적이 없을 때: 바로 공격
+    animus_weight: [0.4, 0.85]           # 효율 행동: Animus 가 이 범위에서 가중치를 바꿀 수 있다 (D27)
     when: "not self.fighting and party.is_leader and member_with_role('opener') == null"
     considerations:
       - "bool(pick_target(policy.targets, policy.shun))"
@@ -16,6 +17,7 @@ behaviors:
       - "bool(party.all_here)"
       - "bool(not party.resting)"      # 누가 쉬는 중이면 기다린다
   hunt_after_opener:                   # 도적이 같은 방에 있으면 backstab 으로 열 시간을 준다
+    animus_weight: [0.4, 0.85]           # 효율 행동: Animus 가 이 범위에서 가중치를 바꿀 수 있다 (D27)
     weight: 0.7
     when: "not self.fighting and party.is_leader and member_with_role('opener') != null"
     considerations:
@@ -26,6 +28,7 @@ behaviors:
     do: ["stand()", "attack(pick_target(policy.targets, policy.shun))"]
     delay_s: 4
   explore:
+    animus_weight: [0.05, 0.5]           # 효율 행동: Animus 가 이 범위에서 가중치를 바꿀 수 있다 (D27)
     considerations:
       - "linear(self.hp_pct, policy.rest_pct, 90)"
       - "linear(party.min_mv_pct, 30, 50)"     # 이동력이 바닥난 파티원을 끌고 다니지 않는다
@@ -33,12 +36,14 @@ behaviors:
       - "bool(party.all_here)"
       - "bool(not party.resting)"
   go_home:                             # 거점 지역 밖이면 돌아간다 (모두 모였을 때)
+    animus_weight: [0.3, 0.74]           # 효율 행동: Animus 가 이 범위에서 가중치를 바꿀 수 있다 (D27)
     weight: 0.65
     when: "not self.fighting and party.is_leader and party.rally != null and not in_zone_of(party.rally)"
     considerations: ["bool(party.all_here)", "bool(not party.resting)"]
     do: ["stand()", "go_to(party.rally)"]
     every_s: 1
   move_hunting_ground:                 # 거점 지역에서 5분 넘게 킬이 없으면 순환 목록의 다음 거점으로 (리젠 대기)
+    animus_weight: [0.3, 0.74]           # 효율 행동: Animus 가 이 범위에서 가중치를 바꿀 수 있다 (D27)
     weight: 0.66
     when: "not self.fighting and party.is_leader and party.rally != null and in_zone_of(party.rally)"
     considerations:

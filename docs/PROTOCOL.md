@@ -195,6 +195,7 @@
 | `runtime.task` | `{task_id, name, event: started\|step\|paused\|resumed\|succeeded\|failed\|abandoned, step?, reason?}` |
 | `runtime.party` | `{event: role_assigned\|goal_changed\|member_lost\|member_found…, detail}` |
 | `runtime.sigil` | `{event: loaded\|rejected, package, errors?}` |
+| `runtime.animus` | `{event: applied\|rejected\|expired\|reverted\|off\|on, patch_id, layer, changes: [{key, old, new, ttl_s?}], reason, origin: strategist\|local\|human\|system, request_id?, errors?}` — Animus 덮어쓰기 레이어의 변경 (`anima/animus/overlay.py`). `reverted` 의 `reason` 은 `human`·`death` |
 
 ## 8. 이름 정규화 (여러 에이전트 합치기)
 같은 사건을 Vallen 은 `"self"` 로, Lil 은 `"Vallen"` 으로 받는다.
@@ -228,3 +229,4 @@ LLM 은 느린 감각기관이다. 질문은 비동기, 답은 이벤트로 온�
 - v0 (2026-10-02, 확정 후 정정): occupants 그룹 표시 `(group)`/`(leader)` 는 실제로 있음 — 색으로 같은/다른 그룹 힌트. `sanctuary`, `blind` 플래그 추가 (호환 변경).
 - v0 (2026-10-03, 1단계 실서버 반영, 호환 추가): `affect.changed`(독·뱀 물기), `items.cannot_drop`(저주받은 물건), `items.used.empty`(`It is empty.`) 추가.
   `You are already following $M.` / `But you are already part of a group.` 는 실패가 아니라 이미 된 상태로 `group.change` 를 낸다. 1단계 마무리 시점의 v0 이다.
+- v0 (2026-10-03, 2단계 S1, 호환 추가): 2부 §7 에 `runtime.animus` (Animus 덮어쓰기 레이어 변경 기록).

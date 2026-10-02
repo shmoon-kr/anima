@@ -22,6 +22,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("paths", nargs="+", type=Path, help="Anima 녹화 하나, 또는 캐릭터별 tintin 로그 여러 개")
     s.add_argument("--from", dest="since", type=float, help="녹화 시작 후 이 분부터")
     s.add_argument("--minutes", type=float, help="이 길이(분)만")
+    s.add_argument("--by-window", type=float, metavar="MIN", help="이 분 단위로 킬·경험치·대기 표")
 
     sg = sub.add_parser("sigil", help="Sigil 패키지 검사·설명")
     sgs = sg.add_subparsers(dest="sigil_cmd", required=True)
@@ -40,6 +41,26 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("stop", help="실행 중인 에이전트를 종료 (게임에서 quit)")
     sub.add_parser("status", help="에이전트별 접속·체력·위치·행동")
     sub.add_parser("reload", help="실행 중인 에이전트의 Sigil 을 다시 읽기 (검증 실패면 이전 것 유지)")
+    an = sub.add_parser("animus", help="Animus 덮어쓰기 레이어: 보기·이력·되돌리기·끄기")
+    ans = an.add_subparsers(dest="animus_cmd", required=True)
+    ans.add_parser("show", help="지금 덮어쓴 값과 잠긴 키")
+    h = ans.add_parser("history", help="적용·거부·되돌림 이력")
+    h.add_argument("-n", type=int, default=20)
+    rv = ans.add_parser("revert", help="패치 하나 또는 전부 되돌리기")
+    rv.add_argument("patch_id", nargs="?")
+    rv.add_argument("--all", action="store_true")
+    ans.add_parser("off", help="덮어쓰기를 끄고 1단계 동작으로 (값은 보존)")
+    ans.add_parser("on", help="덮어쓰기를 다시 켬")
+    st = ans.add_parser("set", help="사람이 값 하나를 직접 덮어쓰기 (시험용)")
+    st.add_argument("layer", help="party 또는 에이전트 이름")
+    st.add_argument("key", help="policy.NAME 또는 weight.BEHAVIOR")
+    st.add_argument("value", help="JSON (숫자, 목록) 또는 문자열")
+    st.add_argument("--ttl", type=float)
+    st.add_argument("--reason", default="set by hand")
+    kd = ans.add_parser("knobs-doc", help="docs/ANIMUS-KNOBS.md 를 패키지에서 다시 생성")
+    kd.add_argument("--agents", type=Path, default=Path("agents"))
+    kd.add_argument("--packages", type=Path, default=Path("packages"))
+
     w = sub.add_parser("watch", help="한 에이전트의 이벤트를 실시간으로 보고, 입력한 줄을 사람 명령으로 보냄")
     w.add_argument("agent")
     w.add_argument("--raw", action="store_true", help="JSON 그대로")
@@ -61,6 +82,8 @@ def main(argv: list[str] | None = None) -> int:
         return _control({"op": "reload"})
     if args.cmd == "watch":
         return _watch(args)
+    if args.cmd == "animus":
+        return _animus(args)
     return 1
 
 
@@ -114,6 +137,30 @@ def _control(req: dict) -> int:
         data = s.makefile().readline()
     print(data.strip())
     return 0
+
+
+def _animus(args: argparse.Namespace) -> int:
+    import json
+    c = args.animus_cmd
+    if c == "knobs-doc":
+        from anima.animus.knobs_doc import write_doc
+        print(write_doc(args.agents, args.packages, Path("docs/ANIMUS-KNOBS.md")), "written")
+        return 0
+    req: dict = {"op": "animus", "sub": c}
+    if c == "history":
+        req["n"] = args.n
+    elif c == "revert":
+        if not args.patch_id and not args.all:
+            print("give a patch id or --all")
+            return 1
+        req.update(patch_id=args.patch_id, all=args.all)
+    elif c == "set":
+        try:
+            value = json.loads(args.value)
+        except json.JSONDecodeError:
+            value = args.value
+        req.update(layer=args.layer, key=args.key, value=value, ttl_s=args.ttl, reason=args.reason)
+    return _control(req)
 
 
 def _status() -> int:
@@ -219,7 +266,7 @@ def _stats(args: argparse.Namespace) -> int:
             t0 = min(ev.t for ev in events) + 60 * (args.since or 0)
             t1 = t0 + 60 * args.minutes if args.minutes else float("inf")
             events = [ev for ev in events if t0 <= ev.t < t1]
-        print(render(compute(events)))
+        print(render(compute(events, window_min=args.by_window or 10.0), args.by_window))
         return 0
     from anima.adapters.tbamud_text.replay import replay_file
     parts = [compute(game_clock(list(replay_file(p, keep_raw=False))), shared_clock=False)

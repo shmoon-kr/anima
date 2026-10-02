@@ -22,6 +22,21 @@ policies:
   inv_hard: 12            # 이보다 많이 들면 남는 장비를 버린다 (SPEC §2 장비와 물건)
   inv_keep: [food, drinkcon, light, key]
 
+# Animus(LLM) 이 바꿀 수 있는 값과 범위 (PHASE-2-PLAN S1, D27). 여기 없는 값은 바꿀 수 없다.
+animus:
+  policies:
+    flee_pct:    {type: number, min: 15, max: 50, step: 10}
+    rest_pct:    {type: number, min: 20, max: 70, step: 15}
+    rest_mp_pct: {type: number, min: 0, max: 90, step: 20}
+    rest_mv:     {type: number, min: 5, max: 60, step: 15}
+    rest_mv_pct: {type: number, min: 10, max: 70, step: 15}
+    hunt_min_hp: {type: number, min: 30, max: 95, step: 15}
+    targets:     {type: words, max_len: 40}
+    shun:        {type: words, max_len: 40, grow_only: true}     # 패키지 값은 빼지 못하고 더하기만
+    danger:      {type: words, max_len: 40, grow_only: true}
+    skill_plan:  {type: plan, max_len: 20}
+    inv_keep:    {type: words, max_len: 8, grow_only: true}
+
 reflexes:
   setup_on_enter:
     on: connection.in_game

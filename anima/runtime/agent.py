@@ -149,6 +149,18 @@ class AgentRuntime:
         self._publish("runtime.sigil", {"event": "loaded", "package": self.agent, "layers": prog.layers})
         return True
 
+    def apply_values(self, prog: Program) -> None:
+        """Hot-apply an already validated program's policies and behavior weights (Animus layers).
+        Unlike `reload`, the running task and the current behavior stay: changing a number must not
+        turn back a member on the way to the guild."""
+        self.program.policies = prog.policies
+        self.program.policy_origin = prog.policy_origin
+        self.program.layers = prog.layers
+        for name, it in prog.behaviors.items():
+            cur = self.program.behaviors.get(name)
+            if cur is not None and cur.spec.get("weight", 1.0) != it.spec.get("weight", 1.0):
+                cur.spec["weight"] = it.spec.get("weight", 1.0)
+
     # ------------------------------------------------------------ direct control
     def act(self, actions: list[str], reason: str = "") -> None:
         """Run action expressions as the system (session start-up etc.)."""

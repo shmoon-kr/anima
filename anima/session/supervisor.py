@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from anima.animus.overlay import Overlay
 from anima.animus.queue import AnimusQueue, FakeProvider
 from anima.bus import Bus
 from anima.memoria import Memoria
@@ -25,6 +26,7 @@ from anima.session.session import Session
 from anima.sigil.program import SigilError, load_agent
 
 FAST_TICK_S = 0.1
+ANIMUS_TICK_S = 5.0
 
 
 @dataclass
@@ -114,6 +116,26 @@ class Supervisor:
             self.party.register(name, rt.state)
             rt.attach()
             self.sessions[name], self.runtimes[name] = sess, rt
+        self._base = {n: self._load(n) for n in self.agents}       # separate objects: hot-apply mutates the runtime's
+        self.overlay = Overlay(
+            self.agents, base=lambda n: self._base[n], rebuild=self._load,
+            apply=lambda n, prog: self.runtimes[n].apply_values(prog),
+            publish=lambda n, t, d: self.bus.publish(self._stamper[n].stamp(t, d)),
+            clock=time.time, is_room=lambda r: bool(self.memoria.graph.rooms_named(r)),
+            apply_party=self._apply_party, leader=self.party.leader,
+            save_path=self.cfg.run_dir / "animus" / "overlay.json")
+        self.overlay.load()
+        self.bus.subscribe(lambda ev: self.overlay.died(ev.agent) if ev.type == "self.died" else None)
+
+    def _load(self, name: str, extra=()):
+        return load_agent(self.cfg.agents_dir / f"{name}.yaml", self.cfg.packages_dir, extra)
+
+    def _apply_party(self, key: str, value: Any) -> None:
+        if key == "rally":
+            self.party.rally = value
+            self.party.save()
+        elif key == "circuit":
+            self.party.circuit = list(value)
 
     async def run(self) -> None:
         self.build()
@@ -121,6 +143,7 @@ class Supervisor:
         (self.cfg.run_dir / "anima.pid").write_text(str(os.getpid()))
         server = await asyncio.start_unix_server(self._control, path=str(self.cfg.run_dir / "anima.sock"))
         self._tasks.append(asyncio.create_task(self.animus.run()))
+        self._tasks.append(asyncio.create_task(self._animus_loop()))
         for i, name in enumerate(self.agents):
             self._tasks.append(asyncio.create_task(self._start_later(name, i * 3.0)))
             self._tasks.append(asyncio.create_task(self._tick_loop(name)))
@@ -153,6 +176,11 @@ class Supervisor:
             self.animus.expire_due()
             await asyncio.sleep(FAST_TICK_S)
 
+    async def _animus_loop(self) -> None:
+        while True:
+            await asyncio.sleep(ANIMUS_TICK_S)
+            self.overlay.expire()
+
     def stop(self) -> None:
         self._stopping.set()
 
@@ -181,10 +209,13 @@ class Supervisor:
                 writer.write((json.dumps(self.status(), ensure_ascii=False) + "\n").encode())
             elif op == "reload":
                 res = {}
-                for name, rt in self.runtimes.items():
-                    res[name] = rt.reload(lambda n=name: load_agent(self.cfg.agents_dir / f"{n}.yaml",
-                                                                    self.cfg.packages_dir))
+                for name, rt in self.runtimes.items():          # the Animus layers stay on top of the new packages
+                    res[name] = rt.reload(lambda n=name: self._load(n, self.overlay.extra_for(n)))
+                    if res[name]:
+                        self._base[name] = self._load(name)
                 writer.write((json.dumps(res) + "\n").encode())
+            elif op == "animus":
+                writer.write((json.dumps(self._animus_op(req), ensure_ascii=False, default=str) + "\n").encode())
             elif op == "stop":
                 writer.write(b'{"ok": true}\n')
                 self.stop()
@@ -201,6 +232,27 @@ class Supervisor:
             pass
         finally:
             writer.close()
+
+    def _animus_op(self, req: dict[str, Any]) -> Any:
+        ov, sub = self.overlay, req.get("sub")
+        if sub == "show":
+            return ov.show()
+        if sub == "history":
+            return ov.history[-int(req.get("n", 20)):]
+        if sub == "revert":
+            return ov.revert(None if req.get("all") else req.get("patch_id"), reason="human")
+        if sub == "off":
+            ov.off()
+            return {"enabled": ov.enabled}
+        if sub == "on":
+            ov.on()
+            return {"enabled": ov.enabled}
+        if sub == "set":                       # a person sets a knob by hand (testing, or overriding the LLM)
+            res = ov.patch(req["layer"], [{"key": req["key"], "value": req["value"], "ttl_s": req.get("ttl_s")}],
+                           req.get("reason", "set by hand"), origin="human")
+            return {"ok": res.ok, "patch_id": res.patch_id, "reason": res.reason, "errors": res.errors,
+                    "changes": res.changes}
+        return {"error": f"unknown animus op {sub!r}"}
 
     async def _watch(self, agent: str, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         q: asyncio.Queue[Event] = asyncio.Queue()

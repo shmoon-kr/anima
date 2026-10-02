@@ -9,6 +9,7 @@ A package is a directory with one or more `*.yaml` files:
     reflexes:  {name: {on: type | [types], if?: expr, do: [action], cooldown_s?}}
     tasks:     {name: {timeout_s?, steps: [step]}}
     asks:      {name: {when: expr, question, context?: {k: expr}, tier, priority, timeout_s, default, schema}}
+    animus:    {policies: {name: knob}}   values an LLM may change (anima/sigil/knobs.py, D27)
 
 An agent manifest stacks packages (`layers`) and may override policies and items.
 Later layers merge into earlier ones key by key; `replace: true` replaces an item, `disabled: true`
@@ -26,6 +27,7 @@ import yaml
 
 from anima.sigil import api
 from anima.sigil.expr import Expr, ExprError, parse
+from anima.sigil.knobs import check_spec, check_value, check_weight_spec
 
 SECTIONS = ("behaviors", "reflexes", "tasks", "asks")
 STEP_KINDS = ("do", "go_to", "wait_until", "wait", "repeat", "go_back")
@@ -80,7 +82,7 @@ def load_package(path: Path) -> Package:
             errors.append(f"{f.name}: top level must be a mapping")
             continue
         for k, v in doc.items():
-            if k in SECTIONS or k == "policies":
+            if k in SECTIONS or k in ("policies", "animus"):
                 if not isinstance(v, dict):
                     errors.append(f"{f.name}: {k} must be a mapping")
                     continue
@@ -131,6 +133,11 @@ class Program:
     tasks: dict[str, Item]
     asks: dict[str, Item]
     disabled: list[str]
+    knobs: dict[str, dict[str, Any]] = field(default_factory=dict)       # policy -> knob spec
+    knob_origin: dict[str, str] = field(default_factory=dict)
+
+    def weight_knobs(self) -> dict[str, list[float]]:
+        return {n: it.spec["animus_weight"] for n, it in self.behaviors.items() if "animus_weight" in it.spec}
 
     def explain(self) -> str:
         out = [f"agent {self.agent}: layers {' → '.join(self.layers)}", "policies:"]
@@ -144,8 +151,10 @@ class Program:
         return "\n".join(out)
 
 
-def build_program(agent: str, packages: list[Package], manifest: dict[str, Any] | None = None) -> Program:
-    """Stack packages in order, apply the manifest's overrides, then validate everything."""
+def build_program(agent: str, packages: list[Package], manifest: dict[str, Any] | None = None,
+                  extra: list[tuple[str, dict[str, Any]]] = ()) -> Program:
+    """Stack packages in order, apply the manifest's overrides, then any `extra` layers (the Animus
+    overrides, `animus:party` then `animus:NAME`), then validate everything."""
     policies: dict[str, Any] = {}
     origin: dict[str, str] = {}
     items: dict[str, dict[str, Item]] = {s: {} for s in SECTIONS}
@@ -155,7 +164,16 @@ def build_program(agent: str, packages: list[Package], manifest: dict[str, Any] 
     if manifest:
         sources.append((f"agent:{agent}", manifest))
         layers.append(f"agent:{agent}")
+    for layer, data in extra:
+        sources.append((layer, data))
+        layers.append(layer)
+    knobs: dict[str, dict[str, Any]] = {}
+    knob_origin: dict[str, str] = {}
     for layer, data in sources:
+        if not layer.startswith("animus:"):          # an LLM never declares what it may change
+            for k, v in ((data.get("animus") or {}).get("policies") or {}).items():
+                knobs[k] = v
+                knob_origin[k] = layer
         for k, v in (data.get("policies") or {}).items():
             policies[k] = v
             origin[k] = layer
@@ -178,7 +196,7 @@ def build_program(agent: str, packages: list[Package], manifest: dict[str, Any] 
                     merged.update(spec)
                 items[section][name] = Item(kind, name, layer, merged)
     prog = Program(agent, layers, policies, origin, items["behaviors"], items["reflexes"],
-                   items["tasks"], items["asks"], disabled)
+                   items["tasks"], items["asks"], disabled, knobs, knob_origin)
     errors = validate(prog)
     if errors:
         raise SigilError(errors)
@@ -197,6 +215,7 @@ def validate(prog: Program) -> list[str]:
         v.task(it)
     for it in prog.asks.values():
         v.ask(it)
+    v.knobs()
     return v.errors
 
 
@@ -274,7 +293,10 @@ class _Validator:
     def behavior(self, it: Item) -> None:
         s = it.spec
         self.allowed(it, {"weight", "when", "considerations", "targets", "do", "task", "every_s", "cooldown_s",
-                          "retry_s", "delay_s", "description"})
+                          "retry_s", "delay_s", "description", "animus_weight"})
+        if "animus_weight" in s:
+            for e in check_weight_spec(it.id, s["animus_weight"]):
+                self.err(it.id, e)
         scope = {"target"} if "targets" in s else set()
         if not isinstance(s.get("weight", 1.0), (int, float)):
             self.err(it.id, "weight must be a number")
@@ -354,6 +376,29 @@ class _Validator:
             if e is not None:
                 it.exprs[f"context.{k}"] = e
 
+    def knobs(self) -> None:
+        p = self.prog
+        for name, spec in p.knobs.items():
+            for e in check_spec(name, spec):
+                self.errors.append(f"{p.knob_origin[name]}: {e}")
+            if name not in p.policies:
+                self.errors.append(f"{p.knob_origin[name]}: animus.policies.{name}: no such policy")
+        for name, layer in p.policy_origin.items():   # values an Animus layer set must be declared knobs
+            if not layer.startswith("animus:"):
+                continue
+            spec = p.knobs.get(name)
+            why = "not an Animus knob" if spec is None or check_spec(name, spec) else check_value(spec, p.policies[name])
+            if why:
+                self.errors.append(f"{layer}: policy {name}: {why}")
+        for it in p.behaviors.values():               # an Animus layer may only touch an opted-in weight
+            if it.layer.startswith("animus:"):
+                rng = it.spec.get("animus_weight")
+                w = it.spec.get("weight", 1.0)
+                if rng is None:
+                    self.errors.append(f"{it.id}: weight is not an Animus knob (no animus_weight)")
+                elif not check_weight_spec(it.id, rng) and not rng[0] <= w <= rng[1]:
+                    self.errors.append(f"{it.id}: weight {w} out of range {rng[0]}..{rng[1]}")
+
     def allowed(self, it: Item, keys: set[str]) -> None:
         extra = set(it.spec) - keys
         if extra:
@@ -362,10 +407,10 @@ class _Validator:
 
 # ---------------------------------------------------------------- manifests
 
-def load_agent(manifest_path: Path, packages_dir: Path) -> Program:
-    """agents/NAME.yaml: {agent, layers: [package...], policies?, behaviors?, ...}"""
+def load_agent(manifest_path: Path, packages_dir: Path, extra: list[tuple[str, dict[str, Any]]] = ()) -> Program:
+    """agents/NAME.yaml: {agent, layers: [package...], policies?, behaviors?, ...}; `extra`: Animus layers"""
     m = yaml_load(manifest_path.read_text(encoding="utf-8")) or {}
     agent = m.get("agent") or manifest_path.stem
     pkgs = [load_package(packages_dir / name) for name in m.get("layers", [])]
     overrides = {k: v for k, v in m.items() if k in SECTIONS or k == "policies"}
-    return build_program(agent, pkgs, overrides)
+    return build_program(agent, pkgs, overrides, extra)

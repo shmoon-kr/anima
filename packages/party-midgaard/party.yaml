@@ -16,6 +16,11 @@ policies:
   rally: "The Entrance To The Newbie Zone"
   leash: 20
   circuit: ["The Entrance To The Newbie Zone", "The End Of The Path"]
+animus:
+  policies:                           # 파티 값: animus:party 레이어(전략가)만 바꿀 수 있다
+    rally:   {type: room, party: true}
+    circuit: {type: rooms, party: true, max_len: 4}
+    leash:   {type: number, min: 5, max: 40, step: 10, party: true}
 behaviors:
   hand_container_to_cleric:          # 물통은 성직자 손에 있어야 채워진다 (create water 는 자기 인벤토리만)
     weight: 0.92

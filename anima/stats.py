@@ -51,11 +51,118 @@ class Stats:
     phases: list[str]
     shared_clock: bool
     follows: dict[str, int] = field(default_factory=dict)
+    flow: "Flow | None" = None
+    animus: "AnimusCost | None" = None
 
     @property
     def unknown_ratio(self) -> float:
         ev = sum(m.events for m in self.members.values())
         return sum(m.unknown for m in self.members.values()) / max(1, ev)
+
+
+@dataclass
+class Flow:
+    """Where the party's time went (shared clock only). Phase-2 task metrics (PHASE-2-PLAN S0)."""
+    idle_s: float = 0.0               # leader had no behavior to run
+    waiting_s: float = 0.0            # ... while a member was resting or sleeping (the leader waits for them)
+    rooms_entered: int = 0            # leader
+    revisits: int = 0                 # entered a room seen among the last REVISIT_WINDOW rooms
+    gold: dict[str, tuple[int, int]] = field(default_factory=dict)       # member -> (first, last) reported
+    phase_s: dict[str, float] = field(default_factory=lambda: defaultdict(float))   # day | night
+    phase_kills: dict[str, int] = field(default_factory=lambda: defaultdict(int))
+    windows: list[dict[str, float]] = field(default_factory=list)     # per WINDOW: kills, exp, waiting_s, idle_s
+
+
+@dataclass
+class AnimusCost:
+    requests: dict[str, int] = field(default_factory=lambda: defaultdict(int))     # per tier
+    answered: int = 0
+    timeouts: int = 0
+    rejected: dict[str, int] = field(default_factory=lambda: defaultdict(int))     # per reason
+    latency_s: list[float] = field(default_factory=list)
+    patches: dict[str, int] = field(default_factory=lambda: defaultdict(int))      # runtime.animus event -> n
+
+
+REVISIT_WINDOW = 20
+DAYLIGHT = {"sunrise": "day", "day": "day", "sunset": "night", "night": "night"}
+
+
+def _flow(evs: list[Event], leader: str, kills: list[float], window_s: float) -> Flow:
+    fl = Flow()
+    start = evs[0].t
+    behavior: str | None = None
+    resting: set[str] = set()
+    recent: list[object] = []
+    phase: str | None = None
+    win: dict[int, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+    prev_t = start
+    for ev in evs:
+        dt = ev.t - prev_t
+        if dt > 0:
+            w = win[int((prev_t - start) // window_s)]
+            if behavior is None:
+                fl.idle_s += dt
+                w["idle_s"] += dt
+                if resting:
+                    fl.waiting_s += dt
+                    w["waiting_s"] += dt
+            if phase:
+                fl.phase_s[phase] += dt
+            prev_t = ev.t
+        d = ev.data
+        if ev.agent == leader and ev.type == "runtime.behavior":
+            behavior = d.get("to")
+        elif ev.type == "position" and ev.agent != leader:
+            (resting.add if d.get("position") in ("resting", "sleeping") else resting.discard)(ev.agent)
+        elif ev.type == "connection.closed":
+            resting.discard(ev.agent)
+        elif ev.type == "world.time" and d.get("phase") in DAYLIGHT:
+            phase = DAYLIGHT[d["phase"]]
+        elif ev.type == "exp.gain":
+            win[int((ev.t - start) // window_s)]["exp"] += int(d.get("amount") or 0)
+        elif ev.type == "char.score" and d.get("gold") is not None:
+            first = fl.gold.get(ev.agent, (d["gold"], d["gold"]))[0]
+            fl.gold[ev.agent] = (first, d["gold"])
+        elif ev.type == "room" and ev.agent == leader:
+            key = _room_key(ev)
+            if recent and key == recent[-1]:
+                continue                                  # a `look` in the same room is not a move
+            fl.rooms_entered += 1
+            fl.revisits += key in recent
+            recent = (recent + [key])[-REVISIT_WINDOW:]
+    ph: str | None = None
+    k = 0
+    for ev in evs:                                      # kills by daylight
+        if ev.type == "world.time" and ev.data.get("phase") in DAYLIGHT:
+            ph = DAYLIGHT[ev.data["phase"]]
+        while k < len(kills) and kills[k] <= ev.t:
+            if ph:
+                fl.phase_kills[ph] += 1
+            k += 1
+    for t in kills:
+        win[int((t - start) // window_s)]["kills"] += 1
+    n = int((evs[-1].t - start) // window_s) + 1
+    fl.windows = [dict(win[i]) for i in range(n)]
+    return fl
+
+
+def _animus(evs: list[Event]) -> AnimusCost:
+    ac = AnimusCost()
+    for ev in evs:
+        d = ev.data
+        if ev.type == "animus.request":
+            ac.requests[d.get("tier", "?")] += 1
+        elif ev.type == "animus.response":
+            ac.answered += 1
+            if d.get("latency_s") is not None:
+                ac.latency_s.append(float(d["latency_s"]))
+        elif ev.type == "animus.timeout":
+            ac.timeouts += 1
+        elif ev.type == "animus.rejected":
+            ac.rejected[d.get("reason", "?")] += 1
+        elif ev.type == "runtime.animus":
+            ac.patches[d.get("event", "?")] += 1
+    return ac
 
 
 def game_clock(events: list[Event]) -> list[Event]:
@@ -104,7 +211,7 @@ def _room_key(ev: Event):
     return None                                   # room.dark: we do not know where we are
 
 
-def compute(events: Iterable[Event], shared_clock: bool = True) -> Stats:
+def compute(events: Iterable[Event], shared_clock: bool = True, window_min: float = 10.0) -> Stats:
     evs = sorted(events, key=lambda e: e.t)
     members: dict[str, Member] = {}
     deaths: list[tuple[float, str, str]] = []
@@ -204,7 +311,11 @@ def compute(events: Iterable[Event], shared_clock: bool = True) -> Stats:
     for a, b in zip(marks, marks[1:]):
         if b - a >= GAP_S:
             gaps.append((a - start, b - a))
-    return Stats((end - start) / 3600.0, kills, gaps, members, leader, phases, shared_clock, dict(follows))
+    st = Stats((end - start) / 3600.0, kills, gaps, members, leader, phases, shared_clock, dict(follows))
+    if shared_clock and leader and evs:
+        st.flow = _flow(evs, leader, kills, 60.0 * window_min)
+        st.animus = _animus(evs)
+    return st
 
 
 def merge(parts: list[Stats]) -> Stats:
@@ -235,7 +346,41 @@ def _fmt_min(v, pct) -> str:
     return f"{v}" + (f" ({pct:.0f}%)" if pct is not None else "")
 
 
-def render(st: Stats) -> str:
+def _pct(xs: list[float], q: float) -> float:
+    xs = sorted(xs)
+    return xs[min(len(xs) - 1, int(q * len(xs)))]
+
+
+def _render_flow(st: Stats, window_min: float | None) -> list[str]:
+    fl, h = st.flow, max(st.hours, 1e-9)
+    out = ["", f"leader idle {fl.idle_s / 60:.1f}m ({fl.idle_s / 36 / h:.0f}%), of which waiting for a resting member"
+               f" {fl.waiting_s / 60:.1f}m ({fl.waiting_s / 36 / h:.0f}%)",
+           f"leader moves {fl.rooms_entered}, revisits within {REVISIT_WINDOW} rooms {fl.revisits}"
+           f" ({100 * fl.revisits / max(1, fl.rooms_entered):.0f}%)"]
+    if fl.phase_s:
+        out.append("by daylight: " + ", ".join(
+            f"{p} {fl.phase_s[p] / 60:.0f}m {fl.phase_kills.get(p, 0)} kills"
+            f" ({fl.phase_kills.get(p, 0) / max(fl.phase_s[p] / 3600, 1e-9):.1f}/h)" for p in ("day", "night") if p in fl.phase_s))
+    if fl.gold:
+        out.append("gold: " + ", ".join(f"{n} {a}→{b} ({b - a:+d})" for n, (a, b) in sorted(fl.gold.items())))
+    if window_min:
+        out += ["", f"{'window':>8} {'kills':>6} {'exp':>7} {'idle':>6} {'waiting':>8}"]
+        for i, w in enumerate(fl.windows):
+            out.append(f"{f'+{i * window_min:.0f}m':>8} {w.get('kills', 0):6.0f} {w.get('exp', 0):7.0f}"
+                       f" {w.get('idle_s', 0) / 60:5.1f}m {w.get('waiting_s', 0) / 60:7.1f}m")
+    ac = st.animus
+    if ac and (ac.requests or ac.patches):
+        lat = (f", latency median {_pct(ac.latency_s, .5):.1f}s p90 {_pct(ac.latency_s, .9):.1f}s"
+               if ac.latency_s else "")
+        out += ["", "animus: requests " + (", ".join(f"{t} {c}" for t, c in sorted(ac.requests.items())) or "0")
+                + f" (claude {ac.requests.get('claude', 0) / h:.1f}/h); answered {ac.answered}, timeouts {ac.timeouts}"
+                + (", rejected " + ", ".join(f"{r} {c}" for r, c in ac.rejected.items()) if ac.rejected else "") + lat]
+        if ac.patches:
+            out.append("animus patches: " + ", ".join(f"{e} {c}" for e, c in sorted(ac.patches.items())))
+    return out
+
+
+def render(st: Stats, window_min: float | None = None) -> str:
     h = max(st.hours, 1e-9)
     lines = [
         f"duration {st.hours:.2f} h{'' if st.shared_clock else ' (estimated from day/night messages)'}"
@@ -270,4 +415,6 @@ def render(st: Stats) -> str:
     if reasons:
         lines += ["", "refused by reason: " + ", ".join(f"{r} {c}" for r, c in
                                                       sorted(reasons.items(), key=lambda x: -x[1]))]
+    if st.flow:
+        lines += _render_flow(st, window_min)
     return "\n".join(lines)

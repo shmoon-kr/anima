@@ -66,3 +66,20 @@ def test_separate_logs_merge_with_the_leader_from_follow_messages():
     mem = compute([ev(0, "Mem", "follow.moved", leader="Lead"), ev(5, "Mem", "combat.death", who="x")], False)
     st = merge([mem, lead])
     assert st.leader == "Lead" and len(st.kills) == 2
+
+
+def test_leader_waiting_for_a_resting_member_and_revisits():
+    evs = [ev(0, "Lead", "group.change", event="new_leader", who="Lead"),
+           ev(0, "Lead", "room", **ROOM_A), ev(0, "Mem", "room", **ROOM_A),
+           ev(0, "Lead", "runtime.behavior", to="hunt"),
+           ev(60, "Lead", "runtime.behavior", to=None),        # nothing to do: idle
+           ev(120, "Mem", "position", position="sleeping"),   # from here the leader is waiting
+           ev(300, "Mem", "position", position="standing"),
+           ev(360, "Lead", "runtime.behavior", to="explore"),
+           ev(370, "Lead", "room", **ROOM_B), ev(380, "Lead", "room", **ROOM_B),   # a look: not a move
+           ev(390, "Lead", "room", **ROOM_A),
+           ev(600, "Lead", "prompt", hp=1, mp=1, mv=1)]
+    fl = compute(evs, window_min=5).flow
+    assert (fl.idle_s, fl.waiting_s) == (300.0, 180.0)
+    assert (fl.rooms_entered, fl.revisits) == (3, 1)
+    assert [round(w.get("waiting_s", 0)) for w in fl.windows] == [180, 0, 0]
