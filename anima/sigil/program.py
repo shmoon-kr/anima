@@ -295,7 +295,14 @@ class _Validator:
     def behavior(self, it: Item) -> None:
         s = it.spec
         self.allowed(it, {"weight", "when", "considerations", "targets", "do", "task", "every_s", "cooldown_s",
-                          "retry_s", "delay_s", "description", "animus_weight", "camp"})
+                          "retry_s", "delay_s", "description", "animus_weight", "camp", "inertia", "supersedes"})
+        if "inertia" in s and not (isinstance(s["inertia"], (int, float)) and 0 <= s["inertia"] <= 0.5):
+            self.err(it.id, "inertia must be a number in 0..0.5")
+        sup = s.get("supersedes")
+        if sup is not None:
+            if not isinstance(sup, list) or not all(isinstance(x, str) for x in sup):
+                self.err(it.id, "supersedes must be a list of behavior names")
+            # names from other layers are fine (a party package's behaviors): unknown ones just never match
         if "animus_weight" in s:
             for e in check_weight_spec(it.id, s["animus_weight"]):
                 self.err(it.id, e)

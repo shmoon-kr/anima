@@ -33,18 +33,23 @@ behaviors:
   # 보초(체력이 가장 많은 파티원)는 깨어서 쉬고, 나머지는 잠(회복 +50%). 위험하면 보초가 모두 깨운다.
   camp_sleep:
     weight: 0.89                      # 따라붙기·보급(0.92~1.2)보다 낮고, 사냥·탐험(≤0.85)보다 높다
+    inertia: 0                        # 야영 시작·끝의 히스테리시스는 파티 칠판에 있다 (D38)
+    supersedes: [camp_rest, rest]
     when: "party.camping and not party.is_sentry and not self.fighting and self.secs_since_alert > 20 and not room.dark and len(room.strangers) == 0"
     considerations: ["bool(party.camping)"]
     do: ["sleep()"]
     every_s: 10
   camp_rest:                          # 방이 안전하지 않으면 자지 말고 쉬기만
     weight: 0.88
-    when: "party.camping and not party.is_sentry and not self.fighting and self.secs_since_alert > 20 and (room.dark or len(room.strangers) > 0)"
+    inertia: 0
+    when: "party.camping and not party.is_sentry and not self.fighting and self.secs_since_alert > 20"
     considerations: ["bool(party.camping)"]
     do: ["rest()"]
     every_s: 10
   camp_watch:                         # 보초는 자지 않는다 (자는 사람은 반드시 맞고 두 배로 다친다: fight.c:885, 923)
     weight: 0.97
+    inertia: 0
+    supersedes: [sleep, camp_sleep, camp_rest, rest]   # 보초가 되면 자던 중이라도 바로 보초로
     when: "party.camping and party.is_sentry and not self.fighting and self.secs_since_alert > 20"
     considerations: ["bool(party.is_sentry)"]
     do: ["rest()"]

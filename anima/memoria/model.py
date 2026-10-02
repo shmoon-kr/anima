@@ -25,6 +25,7 @@ class Room:
     deadly: bool = False        # death trap
     outdoors: bool = False      # dark at night unless lit
     impassable: bool = False    # needs boat / flying / underwater: not reachable on foot
+    move_cost: int = 1          # terrain: a step costs (cost here + cost there) // 2 movement points
     exits: dict[str, Exit] = field(default_factory=dict)
 
 

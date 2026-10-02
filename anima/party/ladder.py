@@ -11,10 +11,17 @@ Zones are ranked by expected growth, not kills: a kill gives the victim's exp / 
 (fight.c:363), and progress is that exp over the span of the level it is gained at (class.c level_exp).
 Before we have hunted a zone the prior is its median mob exp; after ten minutes there the measured
 growth (deaths subtracted: a death costs half of all experience, fight.c:323) takes over.
+Terrain (D37): a step costs movement by sector (constants.c movement_loss: inside/city 1, field 2,
+forest 3, hills 4, mountain 6; a step is the mean of both rooms). Hunting walks ~STEPS_PER_HOUR steps;
+standing regenerates ~REGEN_STAND, sleeping ~REGEN_SLEEP per hour (limits.c move_gain: 20 per game
+hour of 75 s at our age, x1.5 asleep). Where the walking drains more than standing regenerates, part
+of every hour goes to camping: the prior growth is scaled by that hunting fraction, and distance is
+measured in movement points rather than steps.
 The ladder is saved with the party (run/party.json) so it survives restarts.
 """
 from __future__ import annotations
 
+import heapq
 import statistics
 from collections import deque
 from dataclasses import asdict, dataclass, field
@@ -22,6 +29,17 @@ from typing import Any, Callable, Iterable
 
 from anima.memoria import Memoria
 from anima.memoria.graph import Conditions
+
+
+STEPS_PER_HOUR = 350.0       # the leader's moves per hour while hunting (phase-1 control runs: 330-370)
+REGEN_STAND = 960.0          # 20 per 75 s
+REGEN_SLEEP = 1440.0         # x1.5 asleep
+
+
+def hunting_fraction(step_cost: float) -> float:
+    """Share of an hour spent hunting rather than camping to get the movement back."""
+    deficit = STEPS_PER_HOUR * step_cost - REGEN_STAND
+    return 1.0 if deficit <= 0 else 1.0 / (1.0 + deficit / REGEN_SLEEP)
 
 
 @dataclass
@@ -35,6 +53,8 @@ class ZoneFit:
     mobs: int
     expected_growth: float | None = None     # levels per member per hour (prior, or measured once hunted)
     measured: bool = False
+    step_cost: float = 1.0                   # mean movement per step inside the zone
+    path_mv: int = 0                         # movement points to walk there
 
 
 @dataclass
@@ -68,6 +88,20 @@ class Ladder:
     _stats: dict[int, tuple[float, int, int]] | None = None      # zone -> (median, aggressive max, mobs)
 
     # ------------------------------------------------------------ world data
+    _terrain: dict[int, float] | None = None
+
+    def _step_costs(self) -> dict[int, float]:
+        """zone -> mean movement per step over the zone's own connections."""
+        if self._terrain is None:
+            g, rooms = self.memoria.graph, self.memoria.world.rooms
+            acc: dict[int, list[int]] = {}
+            for v, r in rooms.items():
+                for to in g.usable_exits(r).values():
+                    if rooms[to].zone == r.zone:
+                        acc.setdefault(r.zone, []).append(g.step_cost(v, to))
+            self._terrain = {z: statistics.mean(c) for z, c in acc.items()}
+        return self._terrain
+
     def _zone_stats(self) -> dict[int, tuple[float, int, int]]:
         if self._stats is None:
             w = self.memoria.world
@@ -85,8 +119,10 @@ class Ladder:
         return self._stats
 
     def growth(self, zone: int, median_exp: float, span: float | None, party_size: int) -> tuple[float | None, bool]:
-        """Expected levels per member per hour here: measured once hunted long enough, else from mob exp."""
-        prior = (median_exp / 3 / max(1, party_size) / span * self.kills_per_hour) if span else None
+        """Expected levels per member per hour here: measured once hunted long enough, else from mob exp
+        scaled by the share of the hour the terrain leaves for hunting."""
+        frac = hunting_fraction(self._step_costs().get(zone, 1.0))
+        prior = (median_exp / 3 / max(1, party_size) / span * self.kills_per_hour * frac) if span else None
         r = self.risk.get(zone)
         if r is None or r.seconds < self.measured_after_s:
             return prior, False
@@ -94,21 +130,24 @@ class Ladder:
         w = min(1.0, r.seconds / (3 * self.measured_after_s))
         return (measured if prior is None else w * measured + (1 - w) * prior), True
 
-    def _entrances(self, start: int, cond: Conditions) -> dict[int, tuple[int, int]]:
-        """zone -> (nearest room, steps) by one breadth-first walk from start."""
+    def _entrances(self, start: int, cond: Conditions) -> dict[int, tuple[int, int, int]]:
+        """zone -> (nearest room by movement, steps, movement points), one cheapest-path walk from start."""
         g, rooms = self.memoria.graph, self.memoria.world.rooms
-        dist = {start: 0}
-        q = deque([start])
-        best: dict[int, tuple[int, int]] = {}
-        while q:
-            v = q.popleft()
+        cost = {start: (0, 0)}
+        heap = [(0, 0, start)]
+        best: dict[int, tuple[int, int, int]] = {}
+        while heap:
+            mv, steps, v = heapq.heappop(heap)
+            if cost.get(v, (1 << 30,))[0] < mv:
+                continue
             z = rooms[v].zone
             if z not in best:
-                best[z] = (v, dist[v])
+                best[z] = (v, steps, mv)
             for to in g.exits_from(v, cond).values():
-                if to not in dist:
-                    dist[to] = dist[v] + 1
-                    q.append(to)
+                nmv = mv + g.step_cost(v, to)
+                if nmv < cost.get(to, (1 << 30,))[0]:
+                    cost[to] = (nmv, steps + 1)
+                    heapq.heappush(heap, (nmv, steps + 1, to))
         return best
 
     def candidates(self, levels: Iterable[int], has_light: bool = True, span: float | None = None) -> list[ZoneFit]:
@@ -133,12 +172,13 @@ class Ladder:
             r = self.risk.get(z)
             if r and r.blocked_below_level > weakest:
                 continue
-            room, steps = ents[z]
+            room, steps, mv = ents[z]
             g, measured = self.growth(z, median_exp, span, len(levels))
             out.append(ZoneFit(z, zone.name if zone else str(z), self.memoria.world.rooms[room].name, steps,
-                               median, aggr, n, None if g is None else round(g, 4), measured))
-        if span:                                   # growth first; walking costs a little
-            out.sort(key=lambda f: -(f.expected_growth or 0) / (1 + f.steps / 100))
+                               median, aggr, n, None if g is None else round(g, 4), measured,
+                               round(self._step_costs().get(z, 1.0), 2), mv))
+        if span:                                   # growth first; walking there costs a little (movement)
+            out.sort(key=lambda f: -(f.expected_growth or 0) / (1 + f.path_mv / 300))
         else:
             target = avg - 1
             out.sort(key=lambda f: abs(f.median_level - target) + f.steps / 10)     # a level ~ ten steps
@@ -162,23 +202,20 @@ class Ladder:
 
     def start_here(self, levels: Iterable[int], has_light: bool = True, span: float | None = None,
                    size: int = 3) -> list[str]:
-        """After a (re)start: a circuit beginning near where we are. If our zone fits, we stay in it;
-        otherwise the nearest zone whose expected growth is at least half the best one's."""
+        """After a (re)start: the ladder's own ranking measured from where we stand. Our zone costs no
+        walking, so we stay unless another one is better even after paying the walk (in movement).
+        Staying uses a rally inside our zone near the leader, with a name that exists only once."""
         start = self.hub()
         fits = self.candidates(levels, has_light, span)
         if start is None or not fits:
             return []
         here_zone = self.memoria.world.rooms[start].zone
-        first: str | None = None
-        if any(f.zone == here_zone for f in fits):
-            first = self.rally_in_zone(here_zone, start, has_light)
-        if first is None:
-            best = max((f.expected_growth or 0) for f in fits)
-            near = [f for f in fits if (f.expected_growth or 0) >= best / 2] or fits
-            first = min(near, key=lambda f: f.steps).entrance
+        first = fits[0].entrance
+        if fits[0].zone == here_zone:
+            first = self.rally_in_zone(here_zone, start, has_light) or first
         out = [first]
         for f in fits:
-            if f.entrance not in out and f.zone != here_zone:
+            if f.entrance not in out and f.zone != (fits[0].zone if fits[0].zone == here_zone else -1):
                 out.append(f.entrance)
             if len(out) == size:
                 break

@@ -64,6 +64,11 @@ class Graph:
             out[d] = ex.to
         return out
 
+    def step_cost(self, a: int, b: int) -> int:
+        """Movement points for one step from a to b (tbaMUD act.movement.c: the mean of both terrains)."""
+        ra, rb = self.world.rooms[a], self.world.rooms[b]
+        return max(1, (ra.move_cost + rb.move_cost) // 2)
+
     def _is_trap(self, room: Room) -> bool:
         return room.deadly or room.name in self.hazards.deadly_names or not self.usable_exits(room)
 

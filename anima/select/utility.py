@@ -1,7 +1,11 @@
 """Utility-based behavior selection (D18).
 
 score(behavior) = weight × Π clamp(consideration, 0, 1), for the best target if it has `targets`.
-The current behavior gets an inertia bonus so the agent does not flip back and forth.
+The current behavior gets an inertia bonus so the agent does not flip back and forth (D38):
+- its size is the behavior's own `inertia`, else the `inertia` policy. Behaviors with their own hysteresis
+  in their considerations (rest, sleep) or on the party board (camp) need none.
+- no bonus at all while a behavior that `supersedes` the current one is possible (score > 0): a strict
+  upgrade (sleep over rest) may always take over. Otherwise inertia can beat the better choice for good.
 The scores of the top candidates are the reason recorded with every command (D11).
 """
 from __future__ import annotations
@@ -88,7 +92,7 @@ class UtilitySelector:
 
     def evaluate(self) -> list[Choice]:
         out = []
-        inertia = float(self.ctx.program.policies.get("inertia", DEFAULT_INERTIA))
+        default_inertia = float(self.ctx.program.policies.get("inertia", DEFAULT_INERTIA))
         need = 0.0
         for item in self.ctx.program.behaviors.values():
             try:
@@ -98,9 +102,13 @@ class UtilitySelector:
                 c = Choice(item, 0.0)
             if item.spec.get("camp") and c.score > 0:   # D30: how much I need to rest, whatever I chose
                 need = max(need, min(1.0, c.score / max(1e-9, float(item.spec.get("weight", 1.0)))))
-            if self.current and c.item.name == self.current.item.name and c.score > 0:
-                c.score += inertia
             out.append(c)
+        cur = self.current.item.name if self.current else None
+        if cur is not None:
+            upgrade_possible = any(c.score > 0 and cur in (c.item.spec.get("supersedes") or []) for c in out)
+            for c in out:
+                if c.item.name == cur and c.score > 0 and not upgrade_possible:
+                    c.score += float(c.item.spec.get("inertia", default_inertia))
         self.ctx.state.rest_need = need
         out.sort(key=lambda c: -c.score)
         return out

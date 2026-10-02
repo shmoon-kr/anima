@@ -19,6 +19,7 @@ behaviors:
     every_s: 3
   rescue:                              # 약한 직업 파티원이 맞으면 구조 (전사끼리는 안 함)
     weight: 0.97
+    supersedes: [fight_skill, fight_spell, open_fight]   # 싸우던 중이라도 바로 구한다 (D38)
     when: "self.fighting and knows('rescue')"
     targets: "party.members_in_room"
     considerations: ["bool(target.being_hit and not target.is_self and target.class != 'warrior')"]

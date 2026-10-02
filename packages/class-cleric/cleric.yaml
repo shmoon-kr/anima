@@ -22,6 +22,7 @@ policies:
 behaviors:
   heal_fight:
     weight: 1.0
+    supersedes: [fight_spell, fight_skill, give_food, give_water, make_food, create_food]   # 위급한 치료가 먼저 (D38)
     when: "self.fighting and step(secs_since('no_mana'), 30)"
     targets: "party.members_in_room"
     considerations:

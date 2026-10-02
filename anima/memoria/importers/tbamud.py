@@ -17,6 +17,7 @@ from anima.memoria.model import DIRS, ITEM_TYPES, Exit, Mob, Obj, Room, Shop, Wo
 ROOM_DARK, ROOM_DEATH, ROOM_INDOORS = 0, 1, 3
 SECT_INSIDE, SECT_CITY = 0, 1
 IMPASSABLE_SECTORS = {7, 8, 9}
+MOVEMENT_LOSS = [1, 1, 2, 3, 4, 6, 4, 1, 1, 5]      # constants.c movement_loss[] by sector (act.movement.c:252)
 MOB_BITS = {1: "sentinel", 5: "aggressive", 7: "wimpy", 8: "aggr_evil", 9: "aggr_good", 10: "aggr_neutral",
             11: "memory", 12: "helper"}
 _HASH = re.compile(r"#(\d+)")
@@ -111,7 +112,8 @@ def parse_wld(path: Path) -> dict[int, tuple[Room, int]]:
         room = Room(vnum=vnum, name=name.strip(), desc=desc, zone=zone,
                     dark=bool(flags & (1 << ROOM_DARK)), deadly=bool(flags & (1 << ROOM_DEATH)),
                     outdoors=not (flags & (1 << ROOM_INDOORS)) and sector not in (SECT_INSIDE, SECT_CITY),
-                    impassable=sector in IMPASSABLE_SECTORS, exits=exits)
+                    impassable=sector in IMPASSABLE_SECTORS, exits=exits,
+                    move_cost=MOVEMENT_LOSS[sector] if 0 <= sector < len(MOVEMENT_LOSS) else 1)
         out[vnum] = (room, sector)
     return out
 
