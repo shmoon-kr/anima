@@ -259,3 +259,13 @@ def test_hands_full_stops_giving_for_a_while(memoria_proto):
     for _ in range(10):
         p.tick(5)
     assert not any(t.startswith("give ") for t in p.take("Elysia"))
+
+
+def test_a_room_whose_description_is_indented_two_spaces_is_still_a_room():
+    a = TbamudTextAdapter("Vallen")
+    text = ("\x1b[0;33mThe Edge Of The Ravine\x1b[0m\r\n"
+            "  You stand at the edge of a really long drop down.  A small rope\r\n"
+            "mountains to the east.\r\n"
+            "\x1b[0;36m[ Exits: e w ]\x1b[0m\r\n10H 1M 1V > ")
+    rooms = [e for e in a.feed(text) if e.type == "room"]
+    assert rooms and rooms[0].data["name"] == "The Edge Of The Ravine"

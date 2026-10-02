@@ -258,8 +258,8 @@ class TbamudTextAdapter:
                 break
         if e is None:
             return None
-        if e > i + 1 and not lines[i + 1].text.startswith("   "):
-            return None
+        if e > i + 1 and not lines[i + 1].text.startswith(" "):
+            return None            # builders indent descriptions 3 spaces, some 2 (look_at_room prints them as written)
         exits = _parse_exits(EXITS_RE.match(lines[e].text.strip()).group(1))
         desc = "\n".join(l.text.rstrip() for l in lines[i + 1:e])
         objects: list[dict[str, Any]] = []
