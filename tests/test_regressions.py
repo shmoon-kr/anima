@@ -238,6 +238,7 @@ def test_unreachable_new_rally_reverts_to_the_previous_one(memoria_proto):
     p.board.rally = "The End Of The Path"
     p.board.circuit = ["The Entrance To The Newbie Zone", "The End Of The Path"]
     p.enter("Vallen", TEMPLE_SQUARE)
+    p.ev("Vallen", "items.inventory", items=[{"text": "a canteen", "count": 1}])   # no town run for water (D33)
     for d in p.mem.world.rooms[TEMPLE_SQUARE].exits:   # every way out is shut (a locked gate at night)
         p.mem.graph.block_exit(TEMPLE_SQUARE, d, 600)
     for _ in range(3):

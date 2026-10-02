@@ -24,6 +24,8 @@ policies:
   sell_at: 6              # 팔 물건이 이만큼 쌓이면 장보기를 원한다 (D32)
   gold_reserve: 100       # 사고 나서도 남길 금화
   food_min: 2             # 음식이 이보다 적으면 빵집에서 산다
+  drink_min: 1            # 물통이 없으면 물 가게에서 산다 (D33)
+  thirst_trip_s: 180      # 이만큼 목마르면 마을 다녀오기에 분수대를 넣는다 (성직자가 물을 못 대 줄 때)
   pickup_min_cost: 20     # 바닥 물건은 값이 이 이상이거나 더 나은 장비거나 음식이면 줍는다
   gear_avoid: [anti_neutral]   # 쓸 수 없는 물건 표시 (세계 파일 ITEM_ANTI_*). 성향은 중립(-349..349). 직업 패키지가 더한다
   weapon_kinds: []        # 비어 있으면 아무 무기. 도적은 [pierce] (backstab, act.offensive.c:152)
@@ -187,6 +189,12 @@ behaviors:
     considerations: ["bool(buy_here(policy.gold_reserve))"]
     do: ["stand()", "mark('shopping')", "send('buy ' + buy_here(policy.gold_reserve))", "send('inventory')", "send('score')"]
     every_s: 4
+  fill_at_fountain:                   # 분수대에서 물통 채우기 (마을 다녀오기의 한 정거장, D33)
+    weight: 0.86
+    when: "room.has_fountain and not self.fighting and has_item('drinkcon')"
+    considerations: ["step(secs_since('filled'), 600)"]
+    do: ["stand()", "mark('shopping')", "send('fill ' + item_of('drinkcon') + ' fountain')", "mark('filled')"]
+    every_s: 3
   pick_up:
     weight: 0.55
     when: "not self.fighting and len(self.inventory) < policy.inv_hard and not room.dark"

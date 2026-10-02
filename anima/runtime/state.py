@@ -28,7 +28,8 @@ class AgentState:
     practices: int = 0
     position: str = "standing"
     rest_need: float = 0.0          # 0..1, strongest need among `camp: true` behaviors (party camp, D30)
-    shop_wants: list = field(default_factory=list)   # shop rooms worth a trip for me (D32)
+    shop_wants: list = field(default_factory=list)   # shop rooms (and the fountain) worth a trip for me (D32, D33)
+    thirsty_since: float = NEVER
     hungry: bool = False
     thirsty: bool = False
     has_light: bool = False
@@ -113,6 +114,8 @@ class AgentState:
             if "hungry" in d:
                 self.hungry = d["hungry"]
             if "thirsty" in d:
+                if d["thirsty"] and not self.thirsty:
+                    self.thirsty_since = now
                 self.thirsty = d["thirsty"]
         elif t == "position":
             self.position = d["position"]

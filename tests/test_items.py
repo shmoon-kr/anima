@@ -77,3 +77,44 @@ def test_the_party_goes_shopping_when_someone_has_enough_to_sell(memoria_proto):
     p.tick(1)
     assert p.board.trip is not None and shop_room(memoria_proto, WEAPONS) in p.board.trip["stops"]
     assert any(t in MOVES for t in p.take("Vallen"))
+
+
+WATER = 3009
+
+
+def test_long_thirst_puts_the_fountain_on_the_town_run(memoria_proto):
+    h = agent(memoria_proto, "Senia", inventory=["a canteen"])
+    h.ev("condition", thirsty=True)
+    h.advance(181)
+    fountain = memoria_proto.graph.rooms_named("The Temple Square")[0]
+    assert fountain in h.rt.ctx.items.shop_wants([], 100, 6)
+
+
+def test_containers_are_filled_at_the_fountain(memoria_proto):
+    fountain = memoria_proto.graph.rooms_named("The Temple Square")[0]
+    h = agent(memoria_proto, "Senia", vnum=fountain, inventory=["a canteen"])
+    r = memoria_proto.world.rooms[fountain]
+    h.ev("room", name=r.name, desc=r.desc, exits=[{"dir": d, "closed": False} for d in r.exits], occupants=[],
+         objects=[{"text": "A large fountain carved from blue-streaked marble is here, bubbling merrily.", "count": 1}],
+         dark=False)
+    h.advance(4)
+    assert "fill canteen fountain" in h.take() and h.rt.state.marks.get("shopping")
+
+
+def test_a_member_without_a_container_buys_a_canteen(memoria_proto):
+    h = agent(memoria_proto, "Senia", vnum=shop_room(memoria_proto, WATER), gold=500)
+    h.advance(4)
+    assert "buy canteen" in h.take()
+
+
+def test_after_the_town_run_the_party_hunts_somewhere_else(memoria_proto):
+    from anima.party.ladder import Ladder
+    p = PartyHarness(memoria_proto, ["Vallen", "Lumina"])
+    together(p, ["Vallen", "Lumina"])
+    p.board.ladder = Ladder(memoria_proto, hub=lambda: memoria_proto.locator("Vallen").vnum, clock=lambda: p.t)
+    p.board._refresh_circuit()
+    assert len(p.board.circuit) >= 2
+    p.board.rally = p.board.circuit[0]
+    p.board.trip = {"stops": [], "visited": [], "arrived": None, "started": p.t}
+    assert p.board.trip_stop() is None                       # nothing left: the trip ends
+    assert p.board.rally == p.board.circuit[1]

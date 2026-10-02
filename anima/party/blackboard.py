@@ -68,7 +68,7 @@ class PartyBoard:
         if self.ladder is None or self.clock() < self.override_until:
             return False
         lights = [self.states[n].has_light for n in self.online()]
-        new = self.ladder.circuit(self.levels(), has_light=bool(lights) and all(lights))
+        new = self.ladder.circuit(self.levels(), has_light=bool(lights) and all(lights), size=3)
         if new and new != self.circuit:
             self.circuit = new
             return True
@@ -202,8 +202,19 @@ class PartyBoard:
             self.trip = {"stops": stops, "visited": [], "arrived": None, "started": self.clock()}
 
     def _end_trip(self) -> None:
+        """D33: after the town run, hunt in the best fitting zone other than the one we came from."""
         self.trip = None
         self._last_trip_t = self.clock()
+        if self.ladder is None:                    # a fixed circuit: back to where we were
+            return
+        self._refresh_circuit()
+        others = [r for r in self.circuit if r != self.rally]
+        if others and self.clock() >= self.override_until:
+            self.rally = others[0]
+            lead = self.states.get(self.leader)
+            if lead is not None:
+                lead.marks["rally_changed"] = self.clock()
+            self.save()
 
     def trip_stop(self) -> int | None:
         """The shop room the leader should walk to next (nearest first), or None. Cached 2 s."""
@@ -222,6 +233,9 @@ class PartyBoard:
         if self.clock() - t["started"] > self.trip_timeout:
             self._end_trip()
             return None
+        for v in self.trip_wants():                # wants that came up since the start join the trip
+            if v not in t["stops"]:
+                t["stops"].append(v)
         left = [v for v in t["stops"] if v not in t["visited"]]
         if not left:
             self._end_trip()

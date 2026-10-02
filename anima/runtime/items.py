@@ -142,6 +142,12 @@ class Items:
                     best = (up[2], o)
         if best:
             return best[1]
+        if int(self._pol("drink_min", 0)) > 0 and not self._has_type("drinkcon"):     # D33: a water container of our own
+            cons = [self.ctx.memoria.world.objs[v] for v in sh.products
+                    if v in self.ctx.memoria.world.objs and self.ctx.memoria.world.objs[v].type == "drinkcon"
+                    and self.price(self.ctx.memoria.world.objs[v], sh) <= gold]
+            if cons:
+                return max(cons, key=lambda o: (o.values[0], -o.cost))          # holds the most
         food_min = int(self._pol("food_min", 0))
         foods = [self.ctx.memoria.world.objs[v] for v in sh.products
                  if v in self.ctx.memoria.world.objs and self.ctx.memoria.world.objs[v].type == "food"]
@@ -151,6 +157,20 @@ class Items:
             if affordable:
                 return max(affordable, key=lambda o: (o.values[0], -o.cost))     # most filling
         return None
+
+    def _has_type(self, kind: str) -> bool:
+        return any((self._obj(t) or Obj(0, [], "", "", "")).type == kind for t in self.ctx.state.inventory)
+
+    def fountain(self) -> int | None:
+        name = self._pol("fountain_room", "")
+        vs = self.ctx.memoria.graph.rooms_named(name) if name else []
+        return vs[0] if vs else None
+
+    def water_want(self) -> bool:
+        """D33: thirsty for a while (the clerics could not keep up), or nothing to carry water in."""
+        st = self.ctx.state
+        long_thirst = st.thirsty and self.ctx.clock() - st.thirsty_since >= float(self._pol("thirst_trip_s", 180))
+        return long_thirst or (int(self._pol("drink_min", 0)) > 0 and not self._has_type("drinkcon"))
 
     def buy_here(self, reserve: int) -> str | None:
         sh = self.shop_here()
@@ -171,6 +191,9 @@ class Items:
                 sh = self.shop_rooms()[room]
                 if self._buy_choice(sh, reserve) is not None or (sell_total >= sell_at and self.sellable(sh, keep)):
                     out.append(room)
+            f = self.fountain()
+            if f is not None and self.water_want() and f not in out:
+                out.append(f)                    # the fountain is a stop of the town run too
         self._wants = (now, out)
         return out
 
