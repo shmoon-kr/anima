@@ -57,6 +57,13 @@ def main(argv: list[str] | None = None) -> int:
     st.add_argument("value", help="JSON (숫자, 목록) 또는 문자열")
     st.add_argument("--ttl", type=float)
     st.add_argument("--reason", default="set by hand")
+    bn = ans.add_parser("bench", help="공급자 지연 측정 → docs/ANIMUS-BENCH.md")
+    bn.add_argument("tier", choices=["local_fast", "local_think", "claude"])
+    bn.add_argument("--repeat", type=int, default=3)
+    bn.add_argument("--concurrency", type=int, default=6)
+    bn.add_argument("--timeout", type=float, default=120)
+    bn.add_argument("--model", help="local_model 대신 이 모델")
+    bn.add_argument("--no-write", action="store_true")
     kd = ans.add_parser("knobs-doc", help="docs/ANIMUS-KNOBS.md 를 패키지에서 다시 생성")
     kd.add_argument("--agents", type=Path, default=Path("agents"))
     kd.add_argument("--packages", type=Path, default=Path("packages"))
@@ -146,6 +153,8 @@ def _animus(args: argparse.Namespace) -> int:
         from anima.animus.knobs_doc import write_doc
         print(write_doc(args.agents, args.packages, Path("docs/ANIMUS-KNOBS.md")), "written")
         return 0
+    if c == "bench":
+        return _bench(args)
     req: dict = {"op": "animus", "sub": c}
     if c == "history":
         req["n"] = args.n
@@ -161,6 +170,29 @@ def _animus(args: argparse.Namespace) -> int:
             value = args.value
         req.update(layer=args.layer, key=args.key, value=value, ttl_s=args.ttl, reason=args.reason)
     return _control(req)
+
+
+def _bench(args: argparse.Namespace) -> int:
+    import asyncio
+    import tomllib
+    from anima.animus import bench
+    from anima.animus.providers import make_providers
+    cfg_path = Path("config/anima.toml")
+    cfg = dict(tomllib.loads(cfg_path.read_text()).get("animus", {})) if cfg_path.exists() else {}
+    cfg[args.tier] = "claude" if args.tier == "claude" else "lmstudio"
+    if args.model:
+        cfg["local_model"] = args.model
+    provider = make_providers(cfg, None)[0][args.tier]
+    if hasattr(provider, "alive") and not provider.alive():
+        print(f"{provider.url}: model {provider.model!r} not available (is LM Studio running with it loaded?)")
+        return 1
+    concurrency = 1 if args.tier == "claude" else args.concurrency
+    rows = asyncio.run(bench.run(provider, args.tier, args.repeat, concurrency, args.timeout))
+    md = bench.table(rows, f"{args.tier}: {provider.name} {getattr(provider, 'model', '') or 'default'}", concurrency)
+    print(md)
+    if not args.no_write:
+        bench.write(md)
+    return 0
 
 
 def _status() -> int:
@@ -201,6 +233,22 @@ def describe(ev: dict) -> str | None:
             f"\n    · {o['text']}" for o in d.get("occupants", []))
     if t == "unknown":
         return f"  ? {d.get('text')}"
+    # the Animus "thoughts": question → answer → what the overlay did with it
+    if t == "animus.request":
+        why = d.get("context", {}).get("why_now")
+        return f"  ~? {d.get('question_kind')} ({d.get('tier')}, {d.get('priority')})" + (f"  because {', '.join(why)}" if why else "")
+    if t == "animus.response":
+        a = d.get("answer")
+        reason = a.get("reason", "") if isinstance(a, dict) else ""
+        return f"  ~! {d.get('id')} in {d.get('latency_s')}s: {reason or repr(a)[:160]}"
+    if t in ("animus.timeout", "animus.rejected"):
+        return f"  ~x {d.get('id')} {t.split('.')[1]} {d.get('reason', '')} — default stands"
+    if t == "runtime.animus":
+        ch = ", ".join(f"{c.get('key')} {c.get('old')!r}→{c.get('new')!r}" if "new" in c else f"{c.get('key')} removed"
+                       for c in d.get("changes") or [])
+        extra = f" {d.get('reason')}" if d.get("reason") else ""
+        errs = f"  ({'; '.join(d.get('errors')[:3])})" if d.get("errors") else ""
+        return f"  ~= {d.get('event')} [{d.get('layer')}] {ch}{extra}{errs}"
     return f"  {t} {d}"
 
 

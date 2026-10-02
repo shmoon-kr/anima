@@ -145,6 +145,10 @@ class Context:
             return [o.get("text", "") for o in s.occupants
                     if not self.party.is_party_member(o.get("text", "").split(" ", 1)[0])
                     and not any(h.startswith("my_group") for h in o.get("hints", []))]
+        if k == "unidentified":            # strangers the world data cannot name (a question for the Animus)
+            strangers = self._room("strangers", s)
+            return [o.get("text", "") for o in s.occupants if o.get("text", "") in strangers
+                    and self.memoria.knowledge.identify(o).kind == "unknown"]
         if k == "objects":
             return [o.get("text", "") for o in s.room.get("objects", [])]
         if k == "exits":

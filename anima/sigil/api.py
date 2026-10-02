@@ -68,6 +68,7 @@ STATE: list[State] = [
     State("room.occupants", "list", "방 안 존재 줄 목록 (화면 그대로)"),
     State("room.objects", "list", "바닥 물건 줄 목록"),
     State("room.strangers", "list", "방 안 존재 중 파티원이 아닌 것"),
+    State("room.unidentified", "list", "낯선 존재 중 세계 파일로 알아볼 수 없는 것 (Animus 에게 물을 거리)"),
     State("room.exits", "list", "출구 방향 목록"),
     State("room.has_fountain", "bool", "분수대가 있다"),
     # 세계

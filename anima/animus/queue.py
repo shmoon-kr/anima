@@ -69,6 +69,10 @@ def check_schema(value: Any, schema: dict[str, Any]) -> bool:
         return isinstance(value, str)
     if t == "enum":
         return value in schema.get("values", [])
+    if t == "list":
+        return isinstance(value, list) and len(value) <= schema.get("max_len", 100)
+    if t == "object":                 # shape only; the consumer (e.g. the overlay) validates the content
+        return isinstance(value, dict) and all(k in value for k in schema.get("required", []))
     return False
 
 

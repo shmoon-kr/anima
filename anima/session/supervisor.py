@@ -40,6 +40,7 @@ class Config:
     packages_dir: Path = Path("packages")
     recordings: Path = Path("recordings")
     run_dir: Path = Path("run")
+    animus: dict[str, Any] = field(default_factory=dict)     # config/anima.toml [animus]; empty = phase-1 fakes
 
     @classmethod
     def load(cls, root: Path = Path(".")) -> "Config":
@@ -60,7 +61,7 @@ class Config:
                                   or paths.get("world_dir", "../tbamud/lib/world")).expanduser(),
                    hazards=root / paths.get("hazards", "third_party/tbamud/hazards.yaml"),
                    agents_dir=root / "agents", packages_dir=root / "packages",
-                   recordings=root / "recordings", run_dir=root / "run")
+                   recordings=root / "recordings", run_dir=root / "run", animus=local.get("animus", {}))
 
 
 def _tintin_pass(path: Path) -> str:
@@ -95,9 +96,9 @@ class Supervisor:
         stamp = time.strftime("%Y%m%d-%H%M%S")
         self.recorder = Recorder(self.cfg.recordings / f"{stamp}.jsonl", secrets=[self.cfg.password])
         self.recorder.attach(self.bus)
-        self.animus = AnimusQueue(self.bus, {t: FakeProvider(default_answer, name="default")
-                                             for t in ("local_fast", "local_think", "claude")},
-                                  lambda a: self._stamper[a])
+        from anima.animus.providers import make_providers
+        providers, budget = make_providers(self.cfg.animus, FakeProvider(default_answer, name="default"))
+        self.animus = AnimusQueue(self.bus, providers, lambda a: self._stamper[a], budget_per_hour=budget)
         self.bus.subscribe(self._to_watchers)
         programs = {n: load_agent(self.cfg.agents_dir / f"{n}.yaml", self.cfg.packages_dir) for n in self.agents}
         from anima.party.blackboard import PartyBoard
@@ -126,6 +127,110 @@ class Supervisor:
             save_path=self.cfg.run_dir / "animus" / "overlay.json")
         self.overlay.load()
         self.bus.subscribe(lambda ev: self.overlay.died(ev.agent) if ev.type == "self.died" else None)
+        from collections import deque
+        self._recent: deque[Event] = deque()
+        self.bus.subscribe(self._remember)
+        for rt in self.runtimes.values():
+            rt.ask_facts, rt.on_patch = self._ask_facts, self._local_patch
+        self.strategist = None
+        a = self.cfg.animus
+        if a.get("strategist", a.get("claude", "fake") != "fake"):
+            from anima.animus.strategist import Strategist
+            self.strategist = Strategist(
+                self.animus, self.overlay, self.party.leader, view=self._party_view, knobs=self._knob_table,
+                world=self._zones, zone_of_leader=lambda: self._zone(self.memoria.locator(self.party.leader).vnum),
+                notes_path=self.cfg.run_dir / "animus" / "party-notes.md",
+                every_s=float(a.get("strategist_every_min", 30)) * 60, min_gap_s=float(a.get("strategist_gap_min", 5)) * 60)
+            self.bus.subscribe(self.strategist.on_event)
+
+    # ------------------------------------------------------------ local LLM questions (S4)
+    def _remember(self, ev: Event) -> None:
+        if ev.type == "animus.request":
+            return
+        self._recent.append(ev)
+        while self._recent and self._recent[0].t < ev.t - 1800:
+            self._recent.popleft()
+
+    def _ask_facts(self, agent: str, facts: list[str]) -> dict[str, Any]:
+        out: dict[str, Any] = {}
+        if "knobs" in facts:
+            out["knobs"] = {k: {**{x: v for x, v in row.items() if x != "value"},
+                                "value": row["value"] if not isinstance(row["value"], dict) else row["value"].get(agent)}
+                            for k, row in self._knob_table().items()
+                            if not row.get("party") and (not isinstance(row["value"], dict) or agent in row["value"])}
+        if "locked" in facts:
+            out["locked_by_strategist_s"] = self.overlay.locked_keys(agent)
+        if "recent" in facts:
+            from anima.animus.strategist import summarize
+            sm = summarize(list(self._recent))
+            out["last_30_minutes"] = {"me": sm.get("members", {}).get(agent),
+                                      **{k: v for k, v in sm.items() if k != "members"}}
+        return out
+
+    def _local_patch(self, agent: str, answer: Any, request_id: str) -> None:
+        from anima.animus.overlay import patch_groups
+        groups, reason = patch_groups(answer, default_layer=agent)
+        if groups.get(agent):
+            self.overlay.patch(agent, groups[agent], reason or "local", origin="local", request_id=request_id)
+
+    # ------------------------------------------------------------ what the strategist sees
+    def _zone(self, vnum: int | None) -> int | None:
+        z = self.memoria.world.zone_of(vnum) if vnum is not None else None
+        return z.num if z else None
+
+    def _party_view(self) -> dict[str, Any]:
+        members = {}
+        for name, rt in self.runtimes.items():
+            s, vnum = rt.state, self.memoria.locator(name).vnum
+            members[name] = {"in_game": s.in_game, "level": s.level, "class": self.party.classes.get(name),
+                             "roles": [r for r, who in self.party.roles.items() if name in who],
+                             "hp_pct": round(s.pct(s.hp, s.hp_max)), "mp_pct": round(s.pct(s.mp, s.mp_max)),
+                             "mv_pct": round(s.pct(s.mv, s.mv_max)), "position": s.position,
+                             "room": s.room.get("name"), "zone": self._zone(vnum), "gold": s.gold,
+                             "hungry": s.hungry, "thirsty": s.thirsty, "behavior": rt.ctx.behavior,
+                             "task": rt.tasks.name}
+        return {"leader": self.party.leader, "rally": self.party.rally, "circuit": self.party.circuit,
+                "members": members}
+
+    def _knob_table(self) -> dict[str, Any]:
+        out: dict[str, Any] = {}
+        for name in self.agents:
+            prog, live = self._base[name], self.runtimes[name].program
+            for k, spec in prog.knobs.items():
+                row = out.setdefault(f"policy.{k}", {**{x: v for x, v in spec.items() if x != "description"},
+                                                    "value": {}})
+                row["value"][name] = live.policies.get(k)
+            for b, rng in prog.weight_knobs().items():
+                row = out.setdefault(f"weight.{b}", {"type": "weight", "min": rng[0], "max": rng[1], "value": {}})
+                row["value"][name] = live.behaviors[b].spec.get("weight", 1.0)
+        for row in out.values():                           # one value when everyone has the same
+            vals = list(row["value"].values())
+            if all(v == vals[0] for v in vals) and len(row["value"]) == len(self.agents):
+                row["value"] = vals[0]
+        return out
+
+    def _zones(self) -> list[dict[str, Any]]:
+        levels = [rt.state.level for rt in self.runtimes.values() if rt.state.level]
+        if not levels:
+            return []
+        lo, hi = min(levels), max(levels)
+        start = self.memoria.locator(self.party.leader).vnum
+        out = []
+        seen: set[int] = set()
+        for lvl in range(lo, hi + 1):
+            for z in self.memoria.knowledge.zones_for_level(lvl):
+                if z.num in seen:
+                    continue
+                seen.add(z.num)
+                rooms = [r for v, r in sorted(self.memoria.world.rooms.items()) if z.bottom <= v <= z.top]
+                mobs = [m.level for m in self.memoria.world.mobs.values() if z.bottom <= m.vnum <= z.top]
+                path = self.memoria.graph.path(start, rooms[0].vnum, self.memoria.conditions()) \
+                    if start is not None and rooms else None
+                out.append({"zone": z.num, "name": z.name, "levels": f"{z.min_level}-{z.max_level}",
+                            "mob_levels": f"{min(mobs)}-{max(mobs)}" if mobs else None, "mobs": len(mobs),
+                            "rooms": [r.name for r in rooms[:3]],
+                            "steps_from_leader": None if path is None else len(path)})
+        return out[:15]
 
     def _load(self, name: str, extra=()):
         return load_agent(self.cfg.agents_dir / f"{name}.yaml", self.cfg.packages_dir, extra)
@@ -180,6 +285,8 @@ class Supervisor:
         while True:
             await asyncio.sleep(ANIMUS_TICK_S)
             self.overlay.expire()
+            if self.strategist:
+                self.strategist.tick()
 
     def stop(self) -> None:
         self._stopping.set()

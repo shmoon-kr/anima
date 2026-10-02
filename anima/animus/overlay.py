@@ -368,3 +368,33 @@ class Overlay:
         party = [k for k in layers.get(PARTY, {}) if self._party_knob(k)]
         self._commit(layers, self.agents, progs, party)
         self.expire()
+
+
+# ---------------------------------------------------------------- patch answers (from an LLM)
+
+PATCH_SCHEMA = {
+    "type": "object", "required": ["changes"],
+    "shape": '{"changes": [{"layer": "party" | "<agent name>", "key": "policy.NAME" | "weight.BEHAVIOR", '
+             '"value": <new value>, "ttl_s": <seconds, optional>}], "reason": "<why, one sentence>"}. '
+             'Use only keys listed under knobs. An empty "changes" list means: change nothing.',
+}
+
+
+def patch_groups(answer: Any, default_layer: str | None = None) -> tuple[dict[str, list[dict[str, Any]]], str]:
+    """An LLM's patch answer -> ({layer: [change]}, reason). Malformed entries are dropped here; the
+    overlay still validates every value. `default_layer` fills in a missing layer (a local LLM)."""
+    groups: dict[str, list[dict[str, Any]]] = {}
+    if not isinstance(answer, dict):
+        return groups, ""
+    for ch in answer.get("changes") or []:
+        if not isinstance(ch, dict):
+            continue
+        key = ch.get("key") or ch.get("knob")              # models drift between the two words
+        layer = default_layer or ch.get("layer")
+        if not isinstance(key, str) or not isinstance(layer, str) or "value" not in ch:
+            continue
+        c = {"key": key, "value": ch["value"]}
+        if isinstance(ch.get("ttl_s"), (int, float)) and ch["ttl_s"] > 0:
+            c["ttl_s"] = float(ch["ttl_s"])
+        groups.setdefault(layer, []).append(c)
+    return groups, str(answer.get("reason") or "")[:300]

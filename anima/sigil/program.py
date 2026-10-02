@@ -33,7 +33,9 @@ SECTIONS = ("behaviors", "reflexes", "tasks", "asks")
 STEP_KINDS = ("do", "go_to", "wait_until", "wait", "repeat", "go_back")
 TIERS = ("local_fast", "local_think", "claude")
 PRIORITIES = ("danger", "stuck", "routine")
-ANSWER_TYPES = ("boolean", "number", "string", "enum")
+ANSWER_TYPES = ("boolean", "number", "string", "enum", "list", "object")
+ASK_ANSWERS = ("value", "patch")          # patch: the answer changes this agent's own Animus layer
+ASK_FACTS = ("knobs", "locked", "recent")  # context the engine adds (the knob table, locked keys, own stats)
 
 
 class _Loader(yaml.SafeLoader):
@@ -356,7 +358,15 @@ class _Validator:
     def ask(self, it: Item) -> None:
         s = it.spec
         self.allowed(it, {"when", "question", "context", "tier", "priority", "timeout_s", "default", "schema",
-                          "description"})
+                          "description", "answer", "facts", "every_s"})
+        if s.get("answer", "value") not in ASK_ANSWERS:
+            self.err(it.id, f"answer must be one of {ASK_ANSWERS}")
+        if s.get("answer") == "patch":       # the shape is fixed by the engine (overlay.PATCH_SCHEMA)
+            s.setdefault("schema", {"type": "object", "required": ["changes"]})
+        if not set(s.get("facts") or []) <= set(ASK_FACTS):
+            self.err(it.id, f"facts must be among {ASK_FACTS}")
+        if "every_s" in s and not (isinstance(s["every_s"], (int, float)) and s["every_s"] >= 60):
+            self.err(it.id, "every_s must be a number of seconds >= 60")
         if s.get("tier") not in TIERS:
             self.err(it.id, f"tier must be one of {TIERS}")
         if s.get("priority", "routine") not in PRIORITIES:

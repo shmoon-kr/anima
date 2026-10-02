@@ -205,3 +205,46 @@ tasks:
           max: 20
           every_s: 3
       - go_back: true
+
+# Animus 에게 묻는 것 (PHASE-2-PLAN S4). 답은 기다리지 않는다: 오기 전에는 기본값(아무것도 안 바꿈).
+# answer: patch 면 답이 자기 animus:<이름> 레이어의 손잡이 값을 바꾼다 (검증·잠금·되돌림은 overlay).
+asks:
+  self_tune:
+    when: "not self.fighting and self.in_game"
+    every_s: 1200
+    question: >-
+      Look at your last 30 minutes. Is time being lost because of you (the leader waiting while you rest,
+      fleeing too early or too late, resting too often)? Propose changes to your own knobs, or none.
+      Keys under facts.locked_by_strategist_s are decided by the party strategist: leave them.
+    context: {level: self.level, hp_pct: self.hp_pct, mp_pct: self.mp_pct, mv_pct: self.mv_pct,
+              position: self.position, behavior: self.behavior}
+    facts: [knobs, locked, recent]
+    answer: patch
+    tier: local_fast
+    priority: routine
+    timeout_s: 120
+    default: {changes: []}
+  mob_risk:
+    when: "len(room.unidentified) > 0 and not self.fighting"
+    question: >-
+      These creatures are not in the world data. If any is too strong to fight at your level, add a word
+      from its description to shun (never attack) or to danger (leave the room at once). Otherwise change nothing.
+    context: {creatures: room.unidentified, level: self.level, hp_pct: self.hp_pct}
+    facts: [knobs]
+    answer: patch
+    tier: local_fast
+    priority: danger
+    timeout_s: 30
+    default: {changes: []}
+  stuck:
+    when: "self.secs_in_behavior > 600 and self.behavior != null and self.behavior != 'rest' and self.behavior != 'sleep' and not self.fighting"
+    question: >-
+      You have been doing the same thing for over ten minutes. If it looks stuck, which of your knobs
+      would get you moving again? Change nothing if it is fine.
+    context: {behavior: self.behavior, task: self.task, room: room.name, exits: room.exits}
+    facts: [knobs, locked, recent]
+    answer: patch
+    tier: local_fast
+    priority: stuck
+    timeout_s: 60
+    default: {changes: []}

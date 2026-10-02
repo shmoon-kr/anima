@@ -40,7 +40,10 @@ class AgentRuntime:
     clock: Callable[[], float]
     party: PartyView = field(default_factory=SoloParty)
     animus: AnimusQueue | None = None
+    ask_facts: Callable[[str, list[str]], dict] | None = None      # (agent, facts) -> engine context for asks
+    on_patch: Callable[[str, Any, str], None] | None = None         # (agent, answer, request id): `answer: patch`
     _ask_prev: dict[str, bool] = field(default_factory=dict)
+    _ask_last: dict[str, float] = field(default_factory=dict)
     _ask_open: dict[str, str] = field(default_factory=dict)          # request id -> ask name
     _dirty: bool = True
     _last_seq: int | None = None
@@ -92,6 +95,9 @@ class AgentRuntime:
         del self._ask_open[ev.data["id"]]
         if ev.type == "animus.response":
             self.ctx.answers[name] = ev.data.get("answer")
+            item = self.program.asks.get(name)
+            if item is not None and item.spec.get("answer") == "patch" and self.on_patch is not None:
+                self.on_patch(self.agent, ev.data.get("answer"), ev.data["id"])
         else:
             self.ctx.answers.pop(name, None)           # default stands
 
@@ -119,17 +125,32 @@ class AgentRuntime:
         for name, item in self.program.asks.items():
             when = item.exprs.get("when[0]")
             cond = bool(self.ctx.eval(when)) if when is not None else False
+            s = item.spec
             rising = cond and not self._ask_prev.get(name, False)
             self._ask_prev[name] = cond
-            if not rising or name in self._ask_open.values():
+            if "every_s" in s:                  # periodic: while `when` holds, at most every every_s
+                now = self.clock()
+                due = cond and now - self._ask_last.get(name, now - s["every_s"]) >= s["every_s"]
+                if name not in self._ask_last:
+                    self._ask_last[name] = now   # the first one comes a full period after entering
+                    due = False
+            else:
+                due = rising
+            if not due or name in self._ask_open.values():
                 continue
-            s = item.spec
+            self._ask_last[name] = self.clock()
             ctx_vals = {k[len("context."):]: self.ctx.eval(e) for k, e in item.exprs.items() if k.startswith("context.")}
+            if s.get("facts") and self.ask_facts is not None:
+                ctx_vals["facts"] = self.ask_facts(self.agent, list(s["facts"]))
+            schema = s["schema"]
+            if s.get("answer") == "patch":
+                from anima.animus.overlay import PATCH_SCHEMA
+                schema = {**PATCH_SCHEMA, "shape": PATCH_SCHEMA["shape"].replace('"layer": "party" | "<agent name>", ', "")}
             rid = f"{self.agent}:{name}:{next(_req_ids)}"
             self._ask_open[rid] = name
             self.animus.submit(Request(id=rid, agent=self.agent, asker=item.id, tier=s["tier"],
                                        priority=s.get("priority", "routine"), question_kind=name,
-                                       question=s["question"], context=ctx_vals, answer_schema=s["schema"],
+                                       question=s["question"], context=ctx_vals, answer_schema=schema,
                                        timeout_s=float(s["timeout_s"]), default=s["default"]))
 
     # ------------------------------------------------------------ reloading
