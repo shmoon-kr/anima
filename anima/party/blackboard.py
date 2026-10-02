@@ -36,6 +36,7 @@ class PartyBoard:
     trip: dict[str, Any] | None = None
     _last_trip_t: float = -1e9
     _levels: tuple[int, ...] = ()
+    _ladder_started: bool = False
     _apart_since: dict[str, float] = field(default_factory=dict)
     _camps: dict[Any, str | None] = field(default_factory=dict)  # room -> sentry while that room camps
 
@@ -111,7 +112,8 @@ class PartyBoard:
             self._move_on(f"zone {zone} is too dangerous")
         levels = tuple(sorted(self.levels()))
         if levels != self._levels:
-            first = not self._levels and len(levels) == len(self.roster)   # everyone's level known after login
+            first = not self._ladder_started and len(levels) == len(self.roster)   # everyone's level known after login
+            self._ladder_started = self._ladder_started or first
             grew = bool(self._levels) and min(levels or (0,)) > min(self._levels)
             self._levels = levels
             if grew or first:
