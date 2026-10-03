@@ -142,9 +142,34 @@ class MundiWsAdapter:
 
     def screen(self, frame: str) -> str:
         """The frame's lines as a terminal shows them (colours kept), for people watching."""
+        return self.screens(frame, "").get("", "")
+
+    def screens(self, frame: str, lang: str) -> dict[str, str]:
+        """The frame's lines per language: `lang` (the connection's own, `text`) and the others Mundi
+        rendered as well (`texts`, asked for with `also`, D24 in Mundi). Empty languages left out."""
         try:
             env = json.loads(frame)
         except ValueError:
-            return ""
-        lines = env.get("text", []) if isinstance(env, dict) else []
-        return "".join(line + "\r\n" for line in lines)
+            return {}
+        if not isinstance(env, dict):
+            return {}
+        out = {lang: env.get("text") or []}
+        for other, lines in (env.get("texts") or {}).items():
+            if other != lang:
+                out[other] = lines or []
+        return {k: "".join(line + "\r\n" for line in v) for k, v in out.items() if v}
+
+    def room_titles(self, frame: str, lang: str) -> dict[str, str] | None:
+        """A room view's title in each language (its first line, colours off); None if not a room."""
+        try:
+            env = json.loads(frame)
+        except ValueError:
+            return None
+        if not isinstance(env, dict) or env.get("type") != "room":
+            return None
+        out = {}
+        for k, text in self.screens(frame, lang).items():
+            first = strip_ansi(text.split("\r\n", 1)[0]).strip()
+            if first:
+                out[k] = first
+        return out or None

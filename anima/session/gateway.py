@@ -1,6 +1,6 @@
 """The web entrance to the view stream (atrium's spectator page, read-only).
 
-A browser connects to ws://127.0.0.1:[web] port/ws/view?token=..., the token a short-lived one the
+A browser connects to ws://127.0.0.1:[web] port/ws/view?token=...&lang=en|ko, the token a short-lived one the
 web app (muse's atrium) signed for a logged-in person with the key both share ([web] stream_key).
 It gets what `anima play` gets from `view` (coloured text of the character watched, the party every
 second) plus the narration and event lines the terminal would print, already worded here. From the
@@ -68,19 +68,29 @@ def browser_message(raw: str, members: list[str]) -> list[str] | None:
     return None
 
 
+LANGS = ("en", "ko")         # what a viewer may read in (first version)
+
+
 def outgoing(msg: dict[str, Any], describe: Callable[[dict], str | None],
-             narrate: Callable[[dict], str | None]) -> list[dict[str, Any]]:
-    """A viewer-queue message as the browser's messages: text and status as they are; an event as
-    its event line and narration line (the terminal's wording), when it has them."""
-    if msg.get("k") != "ev":
-        return [msg] if msg.get("k") in ("text", "status") else []
+             narrate: Callable[[dict, str], str | None], lang: str = "en") -> list[dict[str, Any]]:
+    """A viewer-queue message as the browser's messages, in the viewer's language: text in `lang`
+    when the server gave it (else the screen language), status as it is, an event as its event line
+    and narration line (the terminal's wording), when it has them."""
+    k = msg.get("k")
+    if k == "text":
+        out = {"k": "text", "a": msg.get("a"), "s": (msg.get("t") or {}).get(lang) or msg["s"]}
+        if msg.get("reset"):
+            out["reset"] = True
+        return [out]
+    if k != "ev":
+        return [msg] if k == "status" else []
     ev, a = msg["ev"], msg.get("a")
     out = []
     if ev.get("type") == "world.time" and (ev.get("data") or {}).get("phase"):
         out.append({"k": "clock", "a": a, "phase": ev["data"]["phase"]})      # the header's game time
     if line := describe(ev):
         out.append({"k": "evline", "a": a, "s": line})
-    if line := narrate(ev):
+    if line := narrate(ev, lang):
         out.append({"k": "narr", "a": a, "s": line})
     return out
 
@@ -103,12 +113,14 @@ class Gateway:
             await ws.close(4401, "token")
             return
         members = list(self.sup.agents)
+        lang = (query.get("lang") or [""])[0]
+        lang = lang if lang in LANGS else LANGS[0]
         first = (query.get("agent") or [""])[0]
         agents = {first if first in members else members[0]}
         q: asyncio.Queue = asyncio.Queue()
         entry = (agents, q)
         self.sup._viewers.append(entry)
-        self._scrollback(agents, q)
+        self._scrollback(agents, q, lang)
 
         async def from_browser() -> None:
             async for raw in ws:
@@ -117,7 +129,7 @@ class Gateway:
                     continue                          # read-only: typed lines and the rest are dropped
                 agents.clear()
                 agents.update(wanted)
-                self._scrollback(agents, q)
+                self._scrollback(agents, q, lang)
 
         async def status() -> None:
             while True:
@@ -132,7 +144,7 @@ class Gateway:
                 if get not in done:
                     get.cancel()
                     break
-                for out in outgoing(get.result(), self.describe, self.narrate):
+                for out in outgoing(get.result(), self.describe, self.narrate, lang):
                     await ws.send(json.dumps(out, ensure_ascii=False, default=str))
         except Exception:                             # noqa: BLE001 — the browser went away
             pass
@@ -142,7 +154,8 @@ class Gateway:
             if entry in self.sup._viewers:
                 self.sup._viewers.remove(entry)
 
-    def _scrollback(self, agents: set[str], q: asyncio.Queue) -> None:
+    def _scrollback(self, agents: set[str], q: asyncio.Queue, lang: str) -> None:
         for a in agents:
-            if self.sup._screen.get(a):
-                q.put_nowait({"k": "text", "a": a, "s": self.sup._screen[a][-SCROLLBACK:], "reset": True})
+            text = (getattr(self.sup, "_screens", {}).get(a) or {}).get(lang) or self.sup._screen.get(a)
+            if text:
+                q.put_nowait({"k": "text", "a": a, "s": text[-SCROLLBACK:], "reset": True})

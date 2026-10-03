@@ -130,8 +130,22 @@ class Desk:
             self._one(rest, t, mates, orders, notes)
 
 
-def describe_for_narration(ev: dict[str, Any]) -> str | None:
-    """One dim line between the server text: what an agent decided and why (the `narrate` view)."""
+_NARRATION = {
+    "en": {"idle": "» idle", "now": "» now {to}   ({scores})", "task": "» task {name} {event}",
+           "asking": "💭 asking: {kind}", "started": "started", "succeeded": "succeeded", "failed": "failed",
+           "abandoned": "abandoned", "applied": "applied", "reverted": "reverted", "expired": "expired",
+           "back": "{key} back"},
+    "ko": {"idle": "» 할 일 없음", "now": "» 지금 {to}   ({scores})", "task": "» 작업 {name} {event}",
+           "asking": "💭 묻는 중: {kind}", "started": "시작", "succeeded": "성공", "failed": "실패",
+           "abandoned": "그만둠", "applied": "적용", "reverted": "되돌림", "expired": "만료",
+           "back": "{key} 원래대로"},
+}
+
+
+def describe_for_narration(ev: dict[str, Any], lang: str = "en") -> str | None:
+    """One dim line between the server text: what an agent decided and why (the `narrate` view).
+    The fixed words in `lang` (en, ko); names of behaviors, commands and reasons stay as they are."""
+    w = _NARRATION.get(lang, _NARRATION["en"])
     t, d = ev.get("type"), ev.get("data", {})
     if t == "command.sent":
         src = d.get("source", {})
@@ -142,17 +156,17 @@ def describe_for_narration(ev: dict[str, Any]) -> str | None:
         return f"» {d.get('text')}   ({src.get('kind')} {who.split('/')[-1]}{': ' + why if why else ''})"
     if t == "runtime.behavior":
         sc = ", ".join(f"{x['id'].split('/')[-1]} {x['score']}" for x in d.get("scores", [])[:3])
-        return f"» now {d.get('to')}   ({sc})" if d.get("to") else "» idle"
+        return w["now"].format(to=d.get("to"), scores=sc) if d.get("to") else w["idle"]
     if t == "runtime.task" and d.get("event") in ("started", "succeeded", "failed", "abandoned"):
-        return f"» task {d.get('name')} {d.get('event')}"
+        return w["task"].format(name=d.get("name"), event=w[d["event"]])
     if t == "animus.request":
         why = d.get("context", {}).get("why_now")
-        return f"💭 asking: {d.get('question_kind')}" + (f" — {', '.join(why)}" if why else "")
+        return w["asking"].format(kind=d.get("question_kind")) + (f" — {', '.join(why)}" if why else "")
     if t == "animus.response":
         a = d.get("answer")
         return f"💭 {a.get('reason') or a.get('why') or ''}" if isinstance(a, dict) else f"💭 {a!r}"
     if t == "runtime.animus" and d.get("event") in ("applied", "reverted", "expired"):
-        ch = ", ".join(f"{c.get('key')}→{c.get('new')!r}" if "new" in c else f"{c.get('key')} back"
+        ch = ", ".join(f"{c.get('key')}→{c.get('new')!r}" if "new" in c else w["back"].format(key=c.get("key"))
                        for c in d.get("changes") or [])
-        return f"💭 {d.get('event')}: {ch}"
+        return f"💭 {w[d['event']]}: {ch}"
     return None

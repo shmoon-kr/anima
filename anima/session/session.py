@@ -51,7 +51,8 @@ class Session:
     _writer: asyncio.StreamWriter | None = None
     _menu_entries: int = 0
     queue: CommandQueue = field(init=False)
-    on_text: Callable[[str], None] | None = None     # the server's text with its colours, for people watching
+    on_text: Callable[[dict[str, str]], None] | None = None   # the server's text with its colours, per language, for people watching
+    room_titles: dict[str, str] = field(default_factory=dict) # mundi: the room's title in each screen language
     protocol: str = "telnet"                         # or "mundi" (WebSocket, JSON)
     profile: dict = field(default_factory=dict)      # mundi: class, sex, lang for the login message
     _ws: object | None = None
@@ -128,7 +129,7 @@ class Session:
                     writer.write(reply)
                 decoded = text.decode("latin-1")
                 if self.on_text is not None:
-                    self.on_text(decoded)
+                    self.on_text({self.profile.get("lang", "en"): decoded})
                 self._publish(self.adapter.feed(decoded))
                 if mark:
                     self._publish(self.adapter.flush())
@@ -152,8 +153,11 @@ class Session:
                         break
                     if isinstance(frame, bytes):
                         continue
-                    if self.on_text is not None and (screen := self.adapter.screen(frame)):
-                        self.on_text(screen)
+                    lang = self.profile.get("lang", "en")
+                    if self.on_text is not None and (screens := self.adapter.screens(frame, lang)):
+                        self.on_text(screens)
+                    if titles := self.adapter.room_titles(frame, lang):
+                        self.room_titles = titles
                     self._publish(self.adapter.feed(frame))
             except websockets.ConnectionClosed:
                 pass
@@ -169,6 +173,8 @@ class Session:
             return
         msg = {"type": "login", "name": self.agent, "password": self.password, "plain": False,
                "lang": self.profile.get("lang", "en")}
+        if self.profile.get("also"):                 # the other languages people watch in (D24 in Mundi)
+            msg["also"] = list(self.profile["also"])
         for k in ("class", "sex"):
             if self.profile.get(k):
                 msg[k] = self.profile[k]

@@ -46,6 +46,7 @@ class Config:
     characters: dict[str, dict[str, Any]] = field(default_factory=dict)   # [characters.NAME]: sex, lang (mundi)
     lang: str = "en"                                          # [server] lang: the screens' language (mundi: en, ko)
     speed: float = 1.0                                        # [server] speed: game time x N (a Mundi run with --speed N)
+    screen_langs: list[str] = field(default_factory=lambda: ["en", "ko"])   # [server] screen_langs: what people may watch in (mundi)
     web_port: int = 0                                         # [web] port: the browsers' view stream (gateway.py), 0 = off
     stream_key: str = ""                                      # [web] stream_key: the key the web app signs tokens with
     profile: str = ""                                         # ANIMA_PROFILE: what a token is for (its target)
@@ -76,6 +77,7 @@ class Config:
                    recordings=sub(root / "recordings"), run_dir=sub(root / "run"), animus=local.get("animus", {}),
                    protocol=secret["server"].get("protocol", "telnet"), characters=secret.get("characters", {}),
                    lang=secret["server"].get("lang", "en"), speed=float(secret["server"].get("speed", 1)),
+                   screen_langs=list(secret["server"].get("screen_langs", ["en", "ko"])),
                    web_port=int(secret.get("web", {}).get("port", 0)), stream_key=secret.get("web", {}).get("stream_key", ""),
                    profile=profile or "default")
 
@@ -107,11 +109,13 @@ class Supervisor:
     _watchers: list[tuple[str, asyncio.Queue]] = field(default_factory=list)
     _viewers: list[tuple[set[str], asyncio.Queue]] = field(default_factory=list)   # (agents, queue) of `view`
     _screen: dict[str, Any] = field(default_factory=dict)                          # agent -> recent coloured text
+    _screens: dict[str, dict[str, str]] = field(default_factory=dict)              # agent -> language -> recent text
 
     def _profile(self, name: str, policies: dict[str, Any]) -> dict[str, Any]:
         """What a Mundi login says about the character: its class from the party's `classes`, and
         sex or language from [characters.NAME] in the secret file."""
         out = {"lang": self.cfg.lang, **self.cfg.characters.get(name, {})}
+        out.setdefault("also", [lang for lang in self.cfg.screen_langs if lang != out["lang"]])
         cls = (policies.get("classes") or {}).get(name)
         if cls and "class" not in out:
             from anima.adapters.mundi_ws.adapter import mundi_class
@@ -150,7 +154,7 @@ class Supervisor:
                            protocol=self.cfg.protocol, profile=self._profile(name, first))
             rt = AgentRuntime(name, prog, self.memoria, self.bus, st, sess.send, timescale.now,
                               party=self.party, animus=self.animus)
-            sess.on_text = lambda text, n=name: self._text(n, text)
+            sess.on_text = lambda texts, n=name: self._text(n, texts)
             self.party.register(name, rt.state)
             rt.attach()
             self.sessions[name], self.runtimes[name] = sess, rt
@@ -360,7 +364,8 @@ class Supervisor:
                          "hp": s.hp, "hp_max": s.hp_max, "mp": s.mp, "mv": s.mv, "position": s.position,
                          "room": s.room.get("name"), "vnum": loc.vnum, "behavior": rt.ctx.behavior,
                          "task": rt.tasks.name, "scores": rt.selector.last_scores[:3],
-                         "class": self.party.classes.get(name), "level": s.level}
+                         "class": self.party.classes.get(name), "level": s.level,
+                         "room_t": dict(sess.room_titles)}
         return out
 
     def _to_watchers(self, ev: Event) -> None:
@@ -375,12 +380,19 @@ class Supervisor:
     # ------------------------------------------------------------ people: screens and input
     SCREEN_KEEP = 16000                                  # characters of scrollback per character
 
-    def _text(self, agent: str, text: str) -> None:
-        buf = (self._screen.get(agent, "") + text)[-self.SCREEN_KEEP:]
-        self._screen[agent] = buf
+    def _text(self, agent: str, texts: dict[str, str]) -> None:
+        """Server text per language: `s` is the screen language ([server] lang, the terminal's), `t`
+        every language there is (web viewers pick theirs)."""
+        if not texts:
+            return
+        text = texts.get(self.cfg.lang) or next(iter(texts.values()))
+        self._screen[agent] = (self._screen.get(agent, "") + text)[-self.SCREEN_KEEP:]
+        per = self._screens.setdefault(agent, {})
+        for lang, t in texts.items():
+            per[lang] = (per.get(lang, "") + t)[-self.SCREEN_KEEP:]
         for agents, q in list(self._viewers):
             if agent in agents:
-                q.put_nowait({"k": "text", "a": agent, "s": text})
+                q.put_nowait({"k": "text", "a": agent, "s": text, "t": texts})
 
     def human_input(self, line: str, focus: str | None) -> list[str]:
         """Route a typed line (aliases, #name, #all, #party, #go, #take); returns notes for the person."""

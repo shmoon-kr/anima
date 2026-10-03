@@ -77,7 +77,7 @@ async def test_login_is_one_message_and_the_password_is_never_recorded(tmp_path)
     assert "connection.in_game" in types and "prompt" in types
     assert next(e for e in evs if e.type == "room").data["id"] == 3001
     assert "hunter2" not in (tmp_path / "r.jsonl").read_text()
-    assert any("Temple" in s for s in screens)
+    assert any("Temple" in t for s in screens for t in s.values())
     assert sess.error is None
 
 
@@ -87,7 +87,8 @@ def test_the_profile_carries_the_screens_language_and_the_class(tmp_path):
     cfg = Config(host="h", port=1, password="p", world_dir=Path("."), hazards=Path("."), protocol="mundi",
                  lang="ko", characters={"Lil": {"sex": "female"}, "Bo": {"lang": "en"}})
     sup = Supervisor(cfg, ["Lil", "Bo"])
-    assert sup._profile("Lil", {"classes": {"Lil": "mage"}}) == {"lang": "ko", "sex": "female", "class": "magic_user"}
+    assert sup._profile("Lil", {"classes": {"Lil": "mage"}}) == {"lang": "ko", "also": ["en"], "sex": "female",
+                                                                 "class": "magic_user"}
     assert sup._profile("Bo", {})["lang"] == "en", "a character's own setting wins"
 
 
@@ -182,3 +183,17 @@ def test_the_practices_left_reach_the_state_as_on_tbamud():
     for ev in MundiWsAdapter("Elysia").feed(env("char.skills", {"practices": 20, "spells": True, "skills": []})):
         st.on_event(ev, 0.0)
     assert st.practices == 20
+
+
+
+def test_a_frame_gives_its_screen_and_room_title_in_each_language():
+    # D24 in Mundi: asked with `also`, the envelope carries the other languages in `texts`
+    a = MundiWsAdapter("Lil")
+    frame = json.dumps({"v": 0, "t": 1, "tick": 1, "seq": 1, "agent": "Lil", "type": "room",
+                        "data": {"id": "tba:30:room:3001", "name": "The Temple Of Midgaard", "exits": []},
+                        "text": ["\x1b[36m미드가르드 신전\x1b[0m", "줄"], "texts": {"en": ["\x1b[36mThe Temple Of Midgaard\x1b[0m"]}})
+    screens = a.screens(frame, "ko")
+    assert set(screens) == {"ko", "en"} and screens["ko"].startswith("\x1b[36m미드가르드")
+    assert a.room_titles(frame, "ko") == {"ko": "미드가르드 신전", "en": "The Temple Of Midgaard"}
+    say = json.dumps({"type": "comm.say", "data": {}, "text": ["x"]})
+    assert a.room_titles(say, "ko") is None and a.screens(say, "en") == {"en": "x\r\n"}

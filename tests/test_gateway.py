@@ -33,12 +33,12 @@ def test_from_the_browser_only_a_character_switch():
 
 def test_an_event_goes_out_as_its_event_line_and_narration():
     ev = {"type": "combat.death", "data": {"who": "the kobold"}}
-    out = outgoing({"k": "ev", "a": "Vallen", "ev": ev}, lambda e: "death: kobold", lambda e: "Vallen이 코볼트를 쓰러뜨렸다")
+    out = outgoing({"k": "ev", "a": "Vallen", "ev": ev}, lambda e: "death: kobold", lambda e, lang: "Vallen이 코볼트를 쓰러뜨렸다")
     assert out == [{"k": "evline", "a": "Vallen", "s": "death: kobold"},
                    {"k": "narr", "a": "Vallen", "s": "Vallen이 코볼트를 쓰러뜨렸다"}]
-    assert outgoing({"k": "notes", "notes": ["x"]}, str, str) == [], "the terminal's notes are not for a watcher"
+    assert outgoing({"k": "notes", "notes": ["x"]}, str, lambda e, lang: None) == [], "the terminal's notes are not for a watcher"
     clock = outgoing({"k": "ev", "a": "Vallen", "ev": {"type": "world.time", "data": {"phase": "night"}}},
-                     lambda e: None, lambda e: None)
+                     lambda e: None, lambda e, lang: None)
     assert clock == [{"k": "clock", "a": "Vallen", "phase": "night"}]
 
 
@@ -47,6 +47,7 @@ class FakeSup:
         self.agents = ["Vallen", "Lil"]
         self._viewers = []
         self._screen = {"Vallen": "\x1b[32mVallen's screen\x1b[0m", "Lil": "Lil's screen"}
+        self._screens = {"Lil": {"en": "Lil's screen", "ko": "Lil의 화면"}}
         self.sent = []
 
     def party_line(self):
@@ -56,7 +57,7 @@ class FakeSup:
 def test_a_browser_watches_switches_and_cannot_type():
     async def run():
         sup = FakeSup()
-        gw = Gateway(sup, KEY, "mundi", lambda e: "ev line", lambda e: None)
+        gw = Gateway(sup, KEY, "mundi", lambda e: "ev line", lambda e, lang: None)
         server = await gw.serve("127.0.0.1", 0)
         port = server.sockets[0].getsockname()[1]
         try:
@@ -91,6 +92,40 @@ def test_a_browser_watches_switches_and_cannot_type():
                     pytest.fail("no event line")
             await asyncio.sleep(0.1)
             assert sup._viewers == [], "a closed page is no longer a viewer"
+        finally:
+            server.close()
+            await server.wait_closed()
+    asyncio.run(run())
+
+
+
+def test_each_viewer_reads_the_screen_in_its_language():
+    msg = {"k": "text", "a": "Lil", "s": "미드가르드 신전\r\n", "t": {"ko": "미드가르드 신전\r\n", "en": "The Temple\r\n"}}
+    assert outgoing(msg, str, lambda e, l: None, "en")[0]["s"] == "The Temple\r\n"
+    assert outgoing(msg, str, lambda e, l: None, "ko")[0]["s"] == "미드가르드 신전\r\n"
+    only = {"k": "text", "a": "Lil", "s": "screen language only"}
+    assert outgoing(only, str, lambda e, l: None, "en")[0]["s"] == "screen language only", "falls back"
+    from anima.session.humans import describe_for_narration
+    ev = {"type": "runtime.behavior", "data": {"to": "explore", "scores": [{"id": "x/explore", "score": 0.2}]}}
+    assert describe_for_narration(ev, "ko").startswith("» 지금 explore")
+    assert describe_for_narration(ev, "en").startswith("» now explore")
+
+
+def test_a_korean_viewer_gets_the_korean_scrollback():
+    async def run():
+        sup = FakeSup()
+        server = await Gateway(sup, KEY, "mundi", lambda e: None, lambda e, l: None).serve("127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        try:
+            tok = sign_token({"user": 1, "target": "mundi", "exp": 9e12}, KEY)
+            async with websockets.connect(f"ws://127.0.0.1:{port}/ws/view?token={tok}&agent=Lil&lang=ko") as ws:
+                for _ in range(4):
+                    m = json.loads(await ws.recv())
+                    if m["k"] == "text":
+                        assert m["s"] == "Lil의 화면"
+                        break
+                else:
+                    pytest.fail("no scrollback")
         finally:
             server.close()
             await server.wait_closed()

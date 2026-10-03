@@ -227,16 +227,18 @@ LLM 은 느린 감각기관이다. 질문은 비동기, 답은 이벤트로 온�
 
 ## 11. 관전 스트림 (웹, 읽기 전용)
 사람이 보는 화면용. 에이전트 계약(§1–§9)과 별개이고, 터미널의 `anima play` 와 같은 `view` 를 웹으로 낸 것 (`anima/session/gateway.py`).
-- 주소: `ws://127.0.0.1:<[web] port>/ws/view?token=<토큰>&agent=<처음 볼 캐릭터>` (Caddy 가 `/ws/*` 를 여기로)
+- 주소: `ws://127.0.0.1:<[web] port>/ws/view?token=<토큰>&agent=<처음 볼 캐릭터>&lang=<en|ko>` (Caddy 가 `/ws/*` 를 여기로).
+  `lang` 은 보는 사람의 언어 (없거나 모르는 값이면 en): 서버 글·해설이 그 언어로 온다.
+  Mundi 에는 로그인 때 `also` 로 다른 언어도 그려 달라고 한다 (`[server] screen_langs`, 기본 en·ko, Mundi D24)
 - 토큰: `base64url(json) . base64url(HMAC-SHA256)`, 키는 웹 앱과 anima 가 나눠 가진 `[web] stream_key`. 내용 `{user, target, exp}`.
   `target` 은 이 anima 의 프로필(`ANIMA_PROFILE`, 없으면 `default`), `exp` 는 만료 시각(유닉스 초). 틀리면 닫음 코드 4401
 - 서버 → 브라우저 (JSON 한 줄씩):
 
 | k | 내용 |
 |---|---|
-| `text` | `{a, s, reset?}` — 서버가 그린 색 있는 글 (ANSI). `reset: true` 는 캐릭터를 바꿨을 때의 최근 화면 |
-| `status` | `{party: {이름: {hp, hp_max, mp, mp_max, mv, mv_max, position, room, vnum, behavior, task, class, level, connected, in_game, …}}}` — 1초마다 |
-| `narr` | `{a, s}` — 해설 한 줄 (터미널의 narrate 와 같은 말) |
+| `text` | `{a, s, reset?}` — 서버가 그린 색 있는 글 (ANSI), 보는 사람의 언어로 (서버가 그 언어로 안 그렸으면 화면 언어). `reset: true` 는 캐릭터를 바꿨을 때의 최근 화면 |
+| `status` | `{party: {이름: {hp, hp_max, mp, mp_max, mv, mv_max, position, room, vnum, behavior, task, class, level, room_t, connected, in_game, …}}}` — 1초마다. `room` 은 세계의 (영어) 방 이름, `room_t` 는 언어별 방 제목 `{en, ko}` |
+| `narr` | `{a, s}` — 해설 한 줄 (터미널의 narrate 와 같은 말, 고정된 말은 보는 사람의 언어로) |
 | `evline` | `{a, s}` — 이벤트 한 줄 (터미널의 events 와 같은 말) |
 | `clock` | `{a, phase}` — 게임 시각 (`world.time` 의 phase: sunrise·day·sunset·night). 시(時)는 아직 없다 |
 
@@ -255,3 +257,4 @@ LLM 은 느린 감각기관이다. 질문은 비동기, 답은 이벤트로 온�
 - v0 (2026-10-03, 호환 추가): `runtime.error`.
 - v0 (2026-10-03, 호환 추가): `items.inventory`·`items.equipment`·`items.used` 의 `vnum?` — 서버가 물건 id 를 주면 그 물건의 원형 번호. 같은 이름의 물건이 여럿이라 이름만으로는 어느 것인지 모른다.
 - v0 (2026-10-04, 호환 추가): §11 관전 스트림 (웹). `status` 에 `class`, `level`.
+- v0 (2026-10-04, 호환 추가): §11 `lang`, `status.room_t`; 뷰어 큐의 `text` 에 언어별 `t`.
