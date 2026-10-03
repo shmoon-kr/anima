@@ -39,7 +39,7 @@ class SoloParty:
     def value(self, field: str, agent: str) -> Any:
         return {"leader": agent, "is_leader": True, "size": 1, "here": 1, "all_here": True, "lost_secs": 0,
                 "resting": False, "rally": None, "role": "", "leader_room": None, "leader_vnum": None,
-                "with_leader": True, "leader_reachable": True, "wait_vnum": None, "following": False, "in_group": False, "online": 1, "min_mv_pct": 100, "unseen_here": 0, "all_following": True,
+                "with_leader": True, "leader_reachable": True, "wait_vnum": None, "following": False, "in_group": False, "leader_in_group": True, "online": 1, "min_mv_pct": 100, "unseen_here": 0, "all_following": True,
                 "thirsty_in_room": [], "hungry_in_room": [], "camping": False, "sentry": None,
                 "is_sentry": False, "trip_stop": None, "trip_wanted": False, "shop_busy": False}.get(field)
 

@@ -177,6 +177,7 @@ def test_non_cleric_hands_the_container_to_a_thirsty_cleric(memoria_proto):
 def test_rejoining_the_leader_comes_before_handing_out_water(memoria_proto):
     p = PartyHarness(memoria_proto, ["Vallen", "Elysia"])
     together(p, ["Vallen", "Elysia"], following=False)
+    p.ev("Vallen", "group.change", event="new_leader", who="Vallen", formed=True)   # the leader's group is there
     p.ev("Elysia", "char.skills", skills={"create water": "superb"})
     p.ev("Elysia", "items.inventory", items=[{"text": "a canteen", "count": 1}])
     p.ev("Vallen", "condition", thirsty=True)
@@ -621,3 +622,16 @@ def test_danger_arriving_at_a_camp_wakes_the_sleepers_before_stepping_away(memor
     assert "wake Vallen" in out, out
     moves = [i for i, t in enumerate(out) if t in ("north", "south", "east", "west", "up", "down")]
     assert not moves or out.index("wake Vallen") < moves[0], out
+
+
+
+def test_a_follower_waits_for_the_leaders_group_before_joining(memoria_proto):
+    # round 53: at login the followers' `group join` came before the leader's `group new`
+    # ("Vallen is not in a group"), then follow again: already_following
+    p = PartyHarness(memoria_proto, ["Vallen", "Elysia"])
+    together(p, ["Vallen", "Elysia"], following=False)
+    p.tick()
+    assert not any(t.startswith("group join") for t in p.take("Elysia"))
+    p.ev("Vallen", "group.change", event="new_leader", who="Vallen", formed=True)
+    p.tick(6)
+    assert "group join Vallen" in p.take("Elysia")

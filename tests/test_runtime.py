@@ -397,6 +397,7 @@ def test_follower_walks_to_leader_then_follows_and_joins(memoria_proto):
         p.take(n)
     p.tick()
     assert "group new" in p.take("Vallen")
+    p.ev("Vallen", "group.change", event="new_leader", who="Vallen", formed=True)
     assert not any(t.startswith("kill") for t in p.sent["Vallen"])     # waits: not all here
     walked = []
     for _ in range(30):

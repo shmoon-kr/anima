@@ -369,7 +369,7 @@ class PartyBoard:
         if agent not in self.roster:
             return {"leader": agent, "is_leader": True, "size": 1, "here": 1, "all_here": True,
                     "lost_secs": 0, "resting": False, "rally": None, "role": "", "leader_room": None,
-                    "with_leader": True, "leader_reachable": True, "wait_vnum": None, "leader_vnum": None, "min_mv_pct": 100, "unseen_here": 0, "all_following": True, "following": False, "in_group": False, "online": 1,
+                    "with_leader": True, "leader_reachable": True, "wait_vnum": None, "leader_vnum": None, "min_mv_pct": 100, "unseen_here": 0, "all_following": True, "following": False, "in_group": False, "leader_in_group": True, "online": 1,
                     "thirsty_in_room": [], "hungry_in_room": [], "camping": False, "sentry": None,
                     "is_sentry": False, "trip_stop": None, "trip_wanted": False, "shop_busy": False}.get(f)
         here = self.in_room_with(agent)
@@ -431,6 +431,9 @@ class PartyBoard:
             return st is not None and st.following == self.leader
         if f == "in_group":
             return st is not None and st.in_group
+        if f == "leader_in_group":
+            ls = self.states.get(self.leader)
+            return ls is not None and ls.in_group
         if f == "thirsty_in_room":
             return [n for n in here if self.states[n].thirsty]
         if f == "hungry_in_room":

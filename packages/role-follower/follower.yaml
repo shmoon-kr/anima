@@ -23,7 +23,8 @@ behaviors:
     every_s: 1
   join_leader:                        # 따라가기가 먼저: 안 그러면 리더가 떠날 때마다 한 방씩 뒤처진다
     weight: 1.2
-    when: "not party.is_leader and party.with_leader and not self.fighting"
+    # 리더가 그룹을 만든 뒤에 (로그인 직후 그보다 먼저 들어가려다 "not in a group" 이 났다, round 53)
+    when: "not party.is_leader and party.with_leader and party.leader_in_group and not self.fighting"
     considerations: ["bool(not party.following or not party.in_group)"]
     do: ["stand()", "send('follow ' + party.leader)", "send('group join ' + party.leader)"]
     every_s: 6

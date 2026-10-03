@@ -72,6 +72,7 @@
 | `party.wait_vnum` | number | 리더에게 못 갈 때 기다릴 방: 나를 막는 출구 바로 앞 (모르면 null) |
 | `party.following` | bool | 리더를 따라가는 중 (서버 follow) |
 | `party.in_group` | bool | 서버 그룹에 들어 있음 |
+| `party.leader_in_group` | bool | 리더가 서버 그룹을 만들었음 (들어갈 그룹이 있다) |
 | `party.online` | number | 게임 안에 있는 명단 인원 |
 | `party.all_following` | bool | 리더 외 게임 안 파티원이 모두 리더를 따라가고 그룹에 들어 있다 |
 | `party.unseen_here` | number | 위치 추정으로는 같은 방인데 방 목록에 안 보이는 파티원 수 |
