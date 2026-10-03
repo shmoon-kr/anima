@@ -485,3 +485,17 @@ def test_a_member_trains_at_its_guild_door_on_the_town_run(memoria_proto):
     assert inward in sent, sent
     p.rt["Elysia"].state.marks["training"] = p.t
     assert p.board.shop_busy("Vallen"), "the trip waits while she trains"
+
+
+def test_the_floor_forgets_what_others_took(memoria_proto):
+    # Round 15: 'get leggings' 23 times, "You don't see a leggings here.": another member had taken
+    # them, and our picture of the room still showed them.
+    p = PartyHarness(memoria_proto, ["Vallen", "Lil"])
+    together(p, ["Vallen", "Lil"])
+    st = p.rt["Lil"].state
+    st.room["objects"] = [{"text": "A pair of bronze leggings lies here.", "count": 1},
+                          {"text": "A dagger lies here.", "count": 2}]
+    p.ev("Lil", "occupant.item", who="Vallen", action="get", text="a dagger")
+    assert [o["count"] for o in st.room["objects"] if "dagger" in o["text"]] == [1]
+    p.ev("Lil", "items.failed", action="get", reason="not_here", keyword="leggings")
+    assert not any("leggings" in o["text"] for o in st.room["objects"])

@@ -152,6 +152,18 @@ class AgentState:
             self._item_used(d)
         elif t in ("items.got", "items.received"):
             self.inventory.append(d.get("text", ""))
+            if t == "items.got" and not d.get("from"):
+                self._room_object(d.get("text", ""), -1)          # taken from the floor
+        elif t == "occupant.item" and not d.get("other"):
+            # someone else took a thing off the floor, or put one down (Mundi): the room's list changes
+            if d.get("action") == "get":
+                self._room_object(d.get("text", ""), -1)
+            elif d.get("action") == "drop":
+                self._room_object(d.get("text", ""), +1)
+        elif t == "items.failed" and d.get("action") == "get" and d.get("reason") == "not_here" and d.get("keyword"):
+            # "You don't see a leggings here.": our picture of the floor is stale; forget what it named
+            w = str(d["keyword"]).lower()
+            self.room["objects"] = [o for o in self.room.get("objects", []) if w not in o.get("text", "").lower()]
         elif t == "items.cannot_drop":
             self.undroppable.add(d.get("text", "").lower())
         elif t == "items.gave":
@@ -222,6 +234,18 @@ class AgentState:
                 self.following = None
         elif t == "connection.closed":
             self.in_game = False
+
+    def _room_object(self, text: str, n: int) -> None:
+        """One more or fewer of a thing on the floor of our picture of the room (by its short text)."""
+        objs = self.room.setdefault("objects", [])
+        for o in objs:
+            if o.get("text", "").lower().endswith(text.lower()) or text.lower() in o.get("text", "").lower():
+                o["count"] = o.get("count", 1) + n
+                if o["count"] <= 0:
+                    objs.remove(o)
+                return
+        if n > 0 and text:
+            objs.append({"text": text, "count": n})
 
     def _item_used(self, d: dict[str, Any]) -> None:
         action, text = d.get("action"), d.get("text", "")
