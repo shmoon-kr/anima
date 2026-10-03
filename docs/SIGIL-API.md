@@ -29,6 +29,7 @@
 | `self.secs_since_fight` | number | 마지막 전투 이후 초 |
 | `self.secs_since_kill` | number | 마지막으로 상대를 죽인 뒤 초 |
 | `self.secs_since_fled` | number | 마지막 도주 이후 초 |
+| `self.chase_dir` | string | 싸우던 몹이 도망간 방향 (본 지 20초 안, 아니면 null): chase() 로 한 방 쫓는다 |
 | `self.secs_since_alert` | number | 마지막 경보(낯선 존재 도착·깨워짐) 이후 초 |
 | `self.secs_in_behavior` | number | 지금 행동을 시작한 뒤 초 |
 | `self.behavior` | text | 지금 고른 행동 이름 |
@@ -161,6 +162,7 @@
 | `practice(skill)` | 연습 |
 | `go_to(room)` | 그 방(이름 또는 번호)으로 한 걸음 (작업 안에서는 도착까지) |
 | `go_back()` | 이동 기록을 한 걸음 되짚기 |
+| `chase()` | 도망간 몹을 그 방향으로 한 방 쫓기 (레벨 위 지역이면 가지 않음) |
 | `explore()` | 덜 가본 출구로 한 걸음 |
 | `ensure_toggle(name, value)` | 서버 토글(autoloot 등)을 그 값으로 맞추기 |
 | `set_wimpy(hp)` | 서버 wimpy 를 맞추기 (최대 체력 1/3 상한) |

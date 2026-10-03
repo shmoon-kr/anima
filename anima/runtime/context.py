@@ -25,6 +25,9 @@ MOVE_WAIT_S = 5.0
 SendFn = Callable[[str, Source, int], None]       # text, source, priority
 
 
+CHASE_S = 20.0                # a fled mob is chased this soon after it left, or not at all
+
+
 class PartyView(Protocol):
     """What the party layer exposes to one agent (M7). SoloParty is the default."""
     def value(self, field: str, agent: str) -> Any: ...
@@ -128,7 +131,8 @@ class Context:
             "hp_pct": lambda: s.pct(s.hp, s.hp_max), "mp_pct": lambda: s.pct(s.mp, s.mp_max),
             "mv_pct": lambda: s.pct(s.mv, s.mv_max), "fighting": lambda: s.fighting(now),
             "secs_since_fight": lambda: now - s.last_fight_t, "secs_since_kill": lambda: now - s.last_kill_t,
-            "secs_since_fled": lambda: now - s.last_fled_t, "secs_since_alert": lambda: now - s.last_alert_t,
+            "secs_since_fled": lambda: now - s.last_fled_t,
+            "chase_dir": lambda: s.chase_dir if now - s.chase_t < CHASE_S else None, "secs_since_alert": lambda: now - s.last_alert_t,
             "secs_in_behavior": lambda: now - self.behavior_since if self.behavior else 0,
             "behavior": lambda: self.behavior, "task": lambda: self.task_name,
         }[k]()
@@ -237,7 +241,7 @@ class Context:
             "flee": lambda: self.cmd("flee"), "rest": self.a_rest, "sleep": self.a_sleep, "stand": self.a_stand,
             "wake": self.a_wake, "wake_party": self.a_wake_party, "eat": self.a_eat, "drink": self.a_drink,
             "practice": lambda skill: self.cmd(f"practice {skill}"),
-            "go_to": self.a_go_to, "go_back": self.a_go_back, "explore": self.a_explore,
+            "go_to": self.a_go_to, "go_back": self.a_go_back, "chase": self.a_chase, "explore": self.a_explore,
             "ensure_toggle": self.a_toggle, "set_wimpy": self.a_wimpy,
             "start_task": lambda name: self.task_hooks["start"](name),
             "next_rally": lambda: getattr(self.party, "next_rally", lambda a: None)(self.agent),
@@ -441,6 +445,20 @@ class Context:
         if not path:
             return "no_path" if path is None else "arrived"
         self.cmd(path[0], move=True, force=True)
+        return "moving"
+
+    def a_chase(self) -> str:
+        """One room after a mob that fled from our fight, the way it went; not into a zone known to be
+        above our level. The chase is then over (the hunt attacks it if it is there)."""
+        d, self.state.chase_dir = self.state.chase_dir, None
+        vnum = self.memoria.locator(self.agent).vnum
+        if d is None or self.moving():
+            return "no_path"
+        ex = self.memoria.world.rooms[vnum].exits.get(d) if vnum in self.memoria.world.rooms else None
+        if ex is not None and ex.to in self.memoria.world.rooms and \
+                self.memoria.world.rooms[ex.to].zone in self.memoria.above_level_zones:
+            return "no_path"
+        self.cmd(d, move=True, force=True)
         return "moving"
 
     def a_go_back(self) -> str:

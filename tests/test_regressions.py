@@ -354,3 +354,40 @@ def test_the_above_level_warning_marks_the_zone_entered_not_the_one_left(memoria
     entered = p.mem.world.rooms[p.mem.world.rooms[3053].exits[way].to].zone
     assert p.mem.above_level_zones == {entered} and 30 not in p.mem.above_level_zones
     assert p.mem.graph.path(3053, NEWBIE_ENTRANCE, p.mem.conditions()) is not None
+
+
+def _fled(memoria_proto, fought=True):
+    p = PartyHarness(memoria_proto, ["Vallen", "Lil"])
+    together(p, ["Vallen", "Lil"])
+    way = next(iter(p.mem.world.rooms[NEWBIE_ENTRANCE].exits))
+    if fought:
+        p.ev("Vallen", "combat.hit", attacker="self", victim="the quasit", outcome="hit")
+    p.ev("Vallen", "combat.flee_seen", who="the quasit")
+    p.ev("Vallen", "occupant.left", who="the quasit", dir=way)
+    for n in ("Vallen", "Lil"):
+        p.take(n)
+    return p, way
+
+
+def test_the_leader_chases_a_fled_mob_one_room(memoria_proto):
+    # Mundi: the quasit fled west; the leader explored north and the kill was lost.
+    p, way = _fled(memoria_proto)
+    assert p.rt["Vallen"].state.chase_dir == way
+    sent = []
+    for _ in range(12):                  # once the fight is over (its window), within the chase's 20 s
+        p.tick()
+        sent += p.take("Vallen")
+    assert way in sent
+    assert p.rt["Vallen"].state.chase_dir is None, "one room: the chase is over"
+
+
+def test_no_chase_after_a_mob_we_did_not_fight_or_into_a_zone_above_us(memoria_proto):
+    p, way = _fled(memoria_proto, fought=False)
+    assert p.rt["Vallen"].state.chase_dir is None
+    p, way = _fled(memoria_proto)
+    p.mem.above_level_zones.add(p.mem.world.rooms[p.mem.world.rooms[NEWBIE_ENTRANCE].exits[way].to].zone)
+    sent = []
+    for _ in range(12):
+        p.tick()
+        sent += p.take("Vallen")
+    assert way not in sent

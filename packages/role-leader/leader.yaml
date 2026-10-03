@@ -29,6 +29,14 @@ behaviors:
       - "linear(self.hp_pct, policy.flee_pct, policy.hunt_min_hp)"
       - "bool(party.all_here)"
       - "bool(not party.resting)"      # 누가 쉬는 중이면 기다린다
+  chase_fled:                          # 싸우던 몹이 도망가면 그 방향으로 한 방만 쫓는다 (거의 죽은 몹: 경험치)
+    weight: 0.85                       # 사냥(≤0.85)·탐험보다 앞, 싸움·휴식·보급보다 뒤
+    when: "not self.fighting and party.is_leader and self.chase_dir != null"
+    considerations:
+      - "linear(self.hp_pct, policy.flee_pct, policy.hunt_min_hp)"
+      - "bool(not party.resting)"
+    do: ["stand()", "chase()"]
+    every_s: 1
   hunt_after_opener:                   # 도적이 같은 방에 있으면 backstab 으로 열 시간을 준다
     animus_weight: [0.4, 0.85]           # 효율 행동: Animus 가 이 범위에서 가중치를 바꿀 수 있다 (D27)
     weight: 0.7

@@ -44,6 +44,10 @@ class AgentState:
     last_fight_t: float = NEVER
     last_kill_t: float = NEVER
     last_fled_t: float = NEVER
+    fled_who: str | None = None          # a mob that panicked while we fought it ...
+    fled_seen_t: float = NEVER
+    chase_dir: str | None = None         # ... and the way it went (chase it one room)
+    chase_t: float = NEVER
     last_alert_t: float = NEVER
     last_died_t: float = NEVER
     marks: dict[str, float] = field(default_factory=dict)
@@ -151,6 +155,8 @@ class AgentState:
             if not self.is_ally(d.get("who", "")):
                 self.last_alert_t = now                    # a stranger: not a party member arriving
         elif t == "occupant.left":
+            if d.get("dir") and d.get("who") == self.fled_who and now - self.fled_seen_t < 10:
+                self.chase_dir, self.chase_t, self.fled_who = d["dir"], now, None     # the mob that fled went that way
             self._drop_occupant(d.get("who", ""))
         elif t == "combat.hit":
             if d.get("victim") and d.get("victim") != SELF and d.get("severity", 0) > 0:
@@ -191,6 +197,8 @@ class AgentState:
         elif t == "group.status":
             self.group_members = [m["name"] for m in d.get("members", [])]
             self.in_group = self.name in self.group_members
+        elif t == "combat.flee_seen" and now - self.last_fight_t < 10:
+            self.fled_who, self.fled_seen_t = d.get("who"), now
         elif t == "connection.in_game":
             self.in_game = True
             if d.get("how") == "entered":
