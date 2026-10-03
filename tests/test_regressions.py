@@ -499,3 +499,20 @@ def test_the_floor_forgets_what_others_took(memoria_proto):
     assert [o["count"] for o in st.room["objects"] if "dagger" in o["text"]] == [1]
     p.ev("Lil", "items.failed", action="get", reason="not_here", keyword="leggings")
     assert not any("leggings" in o["text"] for o in st.room["objects"])
+
+
+def test_a_spell_the_server_has_not_got_is_not_cast_or_practised_again(memoria_proto):
+    # round 20: Mundi has 7 of tbaMUD's spells; Lil cast 'burning hands' into "그 주문은 아직 Mundi에 없다."
+    h = Harness(memoria_proto, agent="Lil")
+    enter_game(h)
+    h.ev("char.skills", skills={"burning hands": "superb", "magic missile": "average"})
+    h.ev("combat.hit", attacker="the kobold", victim="self", verb="hit", severity=1, kind="weapon")
+    h.take()
+    h.advance(4)
+    assert "cast 'burning hands'" in " ".join(h.take())
+    h.ev("skill.result", skill="cast", ok=False, reason="not_yet")
+    h.ev("combat.hit", attacker="the kobold", victim="self", verb="hit", severity=1, kind="weapon")
+    h.advance(4)
+    out = " ".join(h.take())
+    assert "burning hands" not in out and "magic missile" in out, out
+    assert not h.rt.ctx._knows("burning hands")

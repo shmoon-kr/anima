@@ -1,6 +1,8 @@
 """One agent's body state, built only from protocol events (no server text here)."""
 from __future__ import annotations
 
+import re
+
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -8,6 +10,7 @@ from anima.protocol.envelope import SELF, Event
 
 FIGHT_WINDOW_S = 6.0
 NEVER = -1e9
+_CAST = re.compile(r"^cast\s+'([^']+)'")
 BUY_ANSWER_S = 3.0      # a tell this soon after my `buy` is the keeper answering it
 
 
@@ -56,6 +59,8 @@ class AgentState:
     last_died_t: float = NEVER
     marks: dict[str, float] = field(default_factory=dict)
     capped: set[str] = field(default_factory=set)        # skills the guildmaster won't raise further
+    missing: set[str] = field(default_factory=set)       # skills the server has not got yet (not_yet)
+    last_cast: str | None = None
     following: str | None = None                         # whom the server makes us follow
     in_group: bool = False
     group_members: list[str] = field(default_factory=list)
@@ -100,6 +105,10 @@ class AgentState:
             # "Nah... You feel too relaxed to do that.." says where we are: after a reconnect nothing
             # else does, and every behavior's stand() trusts this
             self.position = d["reason"]
+        if t == "skill.result" and d.get("reason") == "not_yet" and self.last_cast:
+            # Mundi has only some of tbaMUD's spells so far: one it lacks is not cast or practised
+            # again (round 20: a spell was cast into "not in Mundi yet")
+            self.missing.add(self.last_cast)
         if t == "shop.list":
             self.shop_list, self.shop_list_room = list(d.get("items", [])), self.room.get("name")
         elif t == "shop.result" and d.get("ok", True) or t == "comm.tell" and now - self.last_buy_t < BUY_ANSWER_S:
@@ -141,6 +150,8 @@ class AgentState:
             text = d.get("text", "")
             if text.startswith("buy "):
                 self.last_buy_t = now
+            if m := _CAST.match(text):
+                self.last_cast = m.group(1).strip().lower()
             if text.startswith("practice "):
                 self.last_practice = text[len("practice "):].strip()
         elif t == "level.up":

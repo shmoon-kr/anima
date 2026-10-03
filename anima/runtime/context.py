@@ -261,7 +261,7 @@ class Context:
 
     # ------------------------------------------------------------ knowledge
     def _knows(self, skill: str) -> bool:
-        return self._proficiency(skill) > 0
+        return self._proficiency(skill) > 0 and skill.replace("_", " ").lower() not in self.state.missing
 
     def _proficiency(self, skill: str) -> int:
         return PROF_RANK.get(self.state.skills.get(skill.replace("_", " "), "not learned"), 0)
@@ -294,7 +294,7 @@ class Context:
                 continue
             if attack and known:
                 newer_attack_known = True
-            if skill in self.state.capped or skill not in self.state.skills:
+            if skill in self.state.capped or skill in self.state.missing or skill not in self.state.skills:
                 continue                     # capped, or not available at this level
             if self._proficiency(skill) < int(entry.get("target", 8)):
                 return skill

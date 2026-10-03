@@ -114,7 +114,7 @@
 | `combat.assist` | `{who, target?}` | `You join the fight!`, `X assists Y.`, `X assists you!`, `X jumps to the aid of Y!`. `target` 은 도움받는 쪽 |
 | `combat.rescue` | `{who, rescued}` | `X heroically rescues Y!` / `You are rescued by X, you are confused!` |
 | `combat.aggro` | `{who, reason: remembered}` | 몹이 기억했다가 덮침: `'Hey!  You're the fiend that attacked me!!!', exclaims X.` (`mobact.c:151`) |
-| `skill.result` | `{skill: string\|null, ok: bool, reason?: unknown_skill\|no_mana\|no_target\|need_weapon\|wrong_weapon\|too_alert\|lost_concentration\|fizzled\|failed}` | 시전·기술 사용 결과 문구. 텍스트만으로 기술 이름을 모르면 `skill` 은 null (보낸 명령과 맞추는 건 위 계층) |
+| `skill.result` | `{skill: string\|null, ok: bool, reason?: unknown_skill\|not_yet\|no_mana\|no_target\|need_weapon\|wrong_weapon\|too_alert\|lost_concentration\|fizzled\|failed}` | 시전·기술 사용 결과 문구. 텍스트만으로 기술 이름을 모르면 `skill` 은 null (보낸 명령과 맞추는 건 위 계층) |
 
 ### 의사소통
 | type | data | 비고 |
