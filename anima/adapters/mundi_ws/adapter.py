@@ -80,6 +80,10 @@ def _also(type_: str, d: dict) -> list[tuple[str, dict]]:
         return [("char.score", {"practices": d["practices"]})]
     if type_ == "move.blocked" and d.get("who") == SELF:
         return [("move.failed", {"reason": "guarded"})]                         # "The guard humiliates you, and blocks your way."
+    if type_ == "door.failed" and reason == "seems_locked":
+        # "It seems to be locked." after `open`: the text adapter's move.failed locked, which tells the
+        # map to leave that door alone for a while (round 23: west of 6505 tried four times)
+        return [("move.failed", {"reason": "locked"})]
     if type_ == "items.failed" and d.get("action") == "drop" and reason == "cursed":
         return [("items.cannot_drop", {"text": d.get("text", ""), "reason": "cursed"})]
     return []
