@@ -65,6 +65,8 @@ class AgentRuntime:
                                         self.tasks.abandon)
         self.tasks.on_finish = self.selector.task_finished
         self.reflexes = ReflexEngine(self.ctx, self._publish, on_fire=lambda: self.tasks.pause(PREEMPT_S))
+        if hasattr(self.party, "register_items"):
+            self.party.register_items(self.agent, self.ctx.items)
         from anima.runtime.loops import LoopGuard
         self.loops = LoopGuard(self.clock, self._publish)
         self.ctx.loops = self.loops

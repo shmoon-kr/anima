@@ -204,6 +204,13 @@ behaviors:
     considerations: ["bool(pickup_item(policy.pickup_min_cost))"]
     do: ["stand()", "send('get ' + pickup_item(policy.pickup_min_cost))", "send('inventory')"]
     every_s: 4
+  share_gear:                         # 파티 전력: 나는 못 쓰거나 더 나은 걸 입었고, 같은 방 파티원에게는 개선인 장비를 준다.
+    weight: 0.8                       # 명령 하나, 받을 사람이 같은 방에 있을 때만: 이동·탐험(≤0.75)보다 앞, 싸움·장보기·보급보다 뒤.
+                                      # 아무도 안 쓰는 것은 팔고(장보기) 넘치면 버린다(junk_surplus)
+    when: "not self.fighting and not party.camping"
+    considerations: ["bool(gear_gift())"]
+    do: ["stand()", "send('give ' + gear_gift())", "send('inventory')"]
+    every_s: 4
   junk_surplus:
     weight: 0.5
     when: "not self.fighting and len(self.inventory) > policy.inv_hard"

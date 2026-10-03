@@ -232,6 +232,7 @@ class Context:
             "next_skill": self._next_skill,
             "practices_spare": self._practices_spare,
             "upgrade_item": lambda: self.items.upgrade_item(),
+            "gear_gift": lambda: self.items.gear_gift(),
             "sellable_here": lambda keep: self.items.sellable_here(keep),
             "buy_here": lambda reserve: self.items.buy_here(reserve),
             "pickup_item": lambda min_cost: self.items.pickup_item(min_cost),

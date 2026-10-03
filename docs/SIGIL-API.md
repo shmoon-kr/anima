@@ -134,6 +134,7 @@
 | `has_role(role)` | 내가 그 역할을 맡았다 |
 | `has_item(kind)` | 가진 물건 중 그 종류(food, drinkcon, light, weapon ...)가 있다 (세계 데이터 기준) |
 | `upgrade_item()` | 가진 물건 중 입은 것보다 나은 장비의 키워드 (policy.gear_avoid·weapon_kinds·레벨 고려, 없으면 null) |
+| `gear_gift()` | 내게는 개선이 아니고 같은 방 파티원에게는 개선인 장비: '키워드 이름' (가장 이득이 큰 사람, 그 사람의 직업·레벨·장비로 판단; 없으면 null) |
 | `sellable_here(keep)` | 이 방 상점이 사 주고 내게 필요 없는 물건의 키워드 (keep 종류·더 나은 장비·저주·nosell 제외) |
 | `buy_here(reserve)` | 이 방 상점에서 살 것의 키워드: 살 수 있는 장비 개선, 없으면 policy.food_min 까지 음식 (reserve 금화는 남김) |
 | `pickup_item(min_cost)` | 바닥 물건 중 주울 것의 키워드: 값이 min_cost 이상, 장비 개선, 또는 음식 |

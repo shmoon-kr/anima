@@ -402,3 +402,22 @@ def test_striking_back_means_we_are_up_though_no_one_said_so(memoria_proto):
     p.ev("Lumina", "combat.hit", attacker="the quasit", victim="self", outcome="hit", severity=1)
     p.ev("Lumina", "combat.hit", attacker="self", victim="the quasit", outcome="miss", severity=0)
     assert p.rt["Lumina"].state.position == "standing"
+
+
+def test_spare_gear_goes_to_the_member_who_can_use_it(memoria_proto):
+    # Mundi: Vallen carried six spare vests while Lumina wore none.
+    vest = "a bright green newbie vest"
+    p = PartyHarness(memoria_proto, ["Vallen", "Lumina", "Senia"])
+    together(p, ["Vallen", "Lumina", "Senia"])
+    p.ev("Vallen", "items.equipment", slots=[{"slot": "worn on body", "text": vest}])
+    p.ev("Vallen", "items.inventory", items=[{"text": vest, "count": 1}])
+    p.ev("Senia", "items.equipment", slots=[{"slot": "worn on body", "text": vest}])
+    p.ev("Lumina", "items.equipment", slots=[])
+    assert p.rt["Vallen"].ctx.items.gear_gift() == "vest Lumina", "to the one without, not to Senia who wears one"
+    for n in ("Vallen", "Lumina", "Senia"):
+        p.take(n)
+    sent = []
+    for _ in range(6):
+        p.tick()
+        sent += p.take("Vallen")
+    assert "give vest Lumina" in sent

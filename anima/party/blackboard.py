@@ -29,6 +29,7 @@ class PartyBoard:
     save_path: Any = None                                       # where the current rally survives restarts
     clock: Callable[[], float] = timescale.now
     states: dict[str, Any] = field(default_factory=dict)        # name -> AgentState
+    items: dict[str, Any] = field(default_factory=dict)       # name -> its Items (share_gear)
     camp_start: float = 0.9                                     # D30: a member's rest need that makes the room camp
     camp_end: float = 0.3                                       # ... and the need below which nobody keeps it going
     ladder: Any = None                                          # anima.party.ladder.Ladder: choose zones by level (D31)
@@ -185,6 +186,10 @@ class PartyBoard:
 
     def register(self, name: str, state: Any) -> None:
         self.states[name] = state
+
+    def register_items(self, name: str, items: Any) -> None:
+        """A member's item judgment (anima.runtime.items.Items), so others can ask what it would wear."""
+        self.items[name] = items
 
     # ------------------------------------------------------------ facts
     def vnum(self, name: str) -> int | None:

@@ -105,6 +105,26 @@ class Items:
         self.ctx.cmd("equipment")
         self.ctx.cmd("inventory")
 
+    # ------------------------------------------------------------ sharing
+    def gear_gift(self) -> str | None:
+        """'<keyword> <member>': gear I carry that is no upgrade for me but is one for a member in my room
+        (the one who gains most, judged by their own class, level and what they wear). What nobody
+        wants stays for selling or junking."""
+        party = self.ctx.party
+        if not hasattr(party, "items") or not hasattr(party, "in_room_with"):
+            return None
+        here = [n for n in party.in_room_with(self.ctx.agent) if n != self.ctx.agent and n in party.items]
+        best = None
+        for text in dict.fromkeys(self.ctx.state.inventory):
+            cands = self.k.items(text)
+            if not cands or not any(gear.slots(o) for o in cands) or self._upgrade_text(text):
+                continue
+            for name in here:
+                up = party.items[name]._upgrade_text(text)
+                if up and (best is None or up[2] > best[0]):
+                    best = (up[2], text, name)
+        return f"{self._kw(best[1])} {best[2]}" if best else None
+
     # ------------------------------------------------------------ selling and buying
     def _keep(self, o: Obj, keep: list[str], text: str) -> bool:
         return o.type in keep or "nosell" in o.extra or self._upgrade_text(text) is not None
