@@ -576,3 +576,23 @@ def test_rest_and_stand_up_agree_and_mana_is_not_a_reason_without_spells(memoria
     for _ in range(4):
         h2.advance(6)
     assert "stand" not in h2.take(), "70% mana: rest still has something to give"
+
+
+def test_a_follower_who_does_not_know_where_it_is_looks_before_going_to_the_leader(memoria_proto):
+    # round 40: reconnected asleep (no room view, `look` refused), woken by go_to_leader, which
+    # then beat orient for 34 minutes with nowhere to go from; the leader waited for everyone
+    p = PartyHarness(memoria_proto, ["Vallen", "Carmilla"])
+    p.ev("Vallen", "connection.in_game", how="entered")
+    v = memoria_proto.world.rooms[NEWBIE_ENTRANCE]
+    p.ev("Vallen", "room", name=v.name, desc=v.desc, exits=[{"dir": d, "closed": False} for d in v.exits],
+         objects=[], occupants=[], dark=False)
+    p.ev("Carmilla", "connection.in_game", how="reconnected")
+    p.ev("Carmilla", "char.vitals_max", hp=40, mp=100, mv=90)
+    p.ev("Carmilla", "prompt", hp=40, mp=100, mv=90)
+    p.ev("Carmilla", "command.refused", reason="sleeping")    # "In your dreams, or what?"
+    p.tick(1)
+    p.ev("Carmilla", "position", position="standing", **{"from": "sleeping"})   # woken
+    p.take("Carmilla")
+    for _ in range(8):
+        p.tick(1)
+    assert "look" in p.take("Carmilla")

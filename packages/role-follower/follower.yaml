@@ -9,7 +9,9 @@ reflexes:
 behaviors:
   go_to_leader:                        # 쉬더라도 리더 곁에서 쉰다 (리더는 쉬는 파티원을 기다린다)
     weight: 1.1
-    when: "not party.is_leader and not party.with_leader and party.leader_vnum != null and party.leader_vnum != room.vnum and party.leader_reachable and not self.fighting"
+    # 내가 어디 있는지 알 때만: 모르면 orient 가 먼저 본다 (round 40: 잠든 채 다시 접속해 look 이
+    # 거부됐고, 깨운 뒤 이 행동이 같은 점수의 orient 를 34분 동안 이겼다. 리더는 모두 모이길 기다렸다)
+    when: "not party.is_leader and not party.with_leader and room.vnum != null and party.leader_vnum != null and party.leader_vnum != room.vnum and party.leader_reachable and not self.fighting"
     considerations: ["step(self.mv, 10)"]
     do: ["stand()", "go_to(party.leader_vnum)"]
     every_s: 1
