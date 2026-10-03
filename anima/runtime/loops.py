@@ -30,9 +30,10 @@ _FAILURE_TYPES = {"unknown", "items.cannot_take", "items.cannot_drop", "items.no
 
 
 def _target_gone(events: list[Event]) -> bool:
-    """Only "Kick whom?" (skill.result who): the target died while the command waited in line."""
+    """Only "Kick whom?" or "But nobody is fighting her!" (a rescue): the fight ended while the
+    command waited in line."""
     no = [ev for ev in events if ev.type == "skill.result" and (ev.data or {}).get("ok") is False]
-    return bool(no) and all((ev.data or {}).get("reason") == "who" for ev in no) and \
+    return bool(no) and all((ev.data or {}).get("reason") in ("who", "nobody_fighting") for ev in no) and \
         not any(ev.type.endswith((".failed", ".refused")) for ev in events)
 
 

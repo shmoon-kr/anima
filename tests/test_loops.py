@@ -140,3 +140,7 @@ def test_kicks_after_each_fights_end_are_not_a_flood():
         answer(g, clock, "kick", [("skill.result", {"skill": "kick", "ok": False, "reason": "who"})],
                source="class-warrior/fight_skill")
     assert g.paused("class-warrior/fight_skill", "kick") == 0 and not seen
+    for _ in range(12):
+        answer(g, clock, "rescue Carmilla", [("skill.result", {"skill": "rescue", "ok": False, "reason": "nobody_fighting"})],
+               source="class-warrior/rescue")
+    assert g.paused("class-warrior/rescue", "rescue Carmilla") == 0 and not seen
