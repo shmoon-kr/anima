@@ -339,13 +339,16 @@ class Context:
         who = self.memoria.knowledge.identify(occ)
         return who.kind == "player" or self.party.is_party_member(occ.get("text", "").split(" ", 1)[0])
 
-    def _path_len(self, room: str) -> int | None:
+    def _path_len(self, room: str | int) -> int | None:
+        """Steps to a room, by name or by number (a trip stop is a number)."""
         vnum = self.memoria.locator(self.agent).vnum
         if vnum is None:
             return None
-        if self.state.room.get("name") == room:
+        if self.state.room.get("name") == room or vnum == room:
             return 0
-        p = self.memoria.graph.path_to_name(vnum, room, self.memoria.conditions(self.state.has_light, agent=self.agent))
+        cond = self.memoria.conditions(self.state.has_light, agent=self.agent)
+        p = self.memoria.graph.path(vnum, room, cond) if isinstance(room, int) else \
+            self.memoria.graph.path_to_name(vnum, room, cond)
         return len(p) if p is not None else None
 
     def _in_zone_of(self, room: str) -> bool:

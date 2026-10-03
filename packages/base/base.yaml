@@ -279,8 +279,9 @@ behaviors:
 
   train_on_trip:                      # 파티가 내 길드 문 앞에 멈췄다: 들어가 배우고 나온다 (따라가기보다 앞)
     weight: 1.15
-    # 파티가 그 문 앞에 왔을 때만: 멀리서 먼저 뛰어가면 리더가 아직 다른 곳이라 되돌아왔다 (round 78)
-    when: "not self.fighting and party.trip_stop != null and party.trip_stop == guild_door() and room.vnum == party.trip_stop"
+    # 파티가 그 문 가까이 왔을 때만 (두 걸음 안): 멀리서 먼저 뛰어가면 리더가 아직 다른 곳이라 되돌아왔다
+    # (round 78). 문 방이 경비 안쪽이면 리더는 거기 못 서니 "그 방에서만" 은 너무 좁았다 (round 81)
+    when: "not self.fighting and party.trip_stop != null and party.trip_stop == guild_door() and path_len(party.trip_stop) != null and path_len(party.trip_stop) <= 2"
     considerations: ["bool(train_wanted())"]
     task: train_at_guild
     retry_s: 600

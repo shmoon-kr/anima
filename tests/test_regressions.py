@@ -672,3 +672,22 @@ def test_one_thing_on_the_floor_is_gone_for_by_one_member(memoria_proto):
     for n in ("Vallen", "Lil"):
         p.rt[n].state.room["objects"] = [{"text": sleeves.long, "count": 2}]
     assert p.rt["Lil"].ctx.items.pickup_item(0) == "sleeves", "two pairs: one each"
+
+
+def test_a_member_sets_off_for_its_guild_when_the_party_is_near_the_door_not_from_afar(memoria_proto):
+    # round 78: from the newbie zone she ran ahead and turned back; round 81: the stop (inside the
+    # guard) was a room the leader can never stand in, so "only in that room" never came
+    def setup(vnum):
+        p = PartyHarness(memoria_proto, ["Vallen", "Elysia"])
+        together(p, ["Vallen", "Elysia"], vnum=vnum)
+        p.ev("Elysia", "char.score", level=5, practices=8)
+        p.ev("Elysia", "char.skills", skills={"cure light": "not learned"})
+        door = p.rt["Elysia"].ctx._guild_door()
+        p.board.trip = {"stops": [door], "visited": [], "arrived": None, "started": p.t}
+        for n in ("Vallen", "Elysia"):
+            p.take(n)
+        for _ in range(3):
+            p.tick()
+        return p.rt["Elysia"].tasks.name
+    assert setup(3004) == "train_at_guild", "the entrance, a step from the stop inside the guard: in she goes"
+    assert setup(NEWBIE_ENTRANCE) != "train_at_guild", "from afar: wait for the party"
