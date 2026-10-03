@@ -318,8 +318,12 @@ class Context:
         g = self.memoria.graph
         path = g.path(rooms[0], here, self.memoria.conditions(self.state.has_light), max_rooms=4000)
         if not path:
-            return None
-        return g.exits_from(rooms[0], self.memoria.conditions(self.state.has_light))[path[0]]
+            # inside the guild room there is no way "toward where I am": the door stays the one it was
+            # (round 83: it changed under train_on_trip at the guild and she walked out, four times)
+            return getattr(self, "_last_guild_door", None)
+        door = g.exits_from(rooms[0], self.memoria.conditions(self.state.has_light))[path[0]]
+        self._last_guild_door = door
+        return door
 
     def _practices_spare(self, reserve_for: dict[str, int] | None) -> int:
         keep = 2 if any(int(lv) == self.state.level + 1 for lv in (reserve_for or {}).values()) else 0

@@ -691,3 +691,15 @@ def test_a_member_sets_off_for_its_guild_when_the_party_is_near_the_door_not_fro
         return p.rt["Elysia"].tasks.name
     assert setup(3004) == "train_at_guild", "the entrance, a step from the stop inside the guard: in she goes"
     assert setup(NEWBIE_ENTRANCE) != "train_at_guild", "from afar: wait for the party"
+
+
+def test_the_guild_door_stays_the_same_from_inside_the_guild(memoria_proto):
+    # round 83: started at the entrance, at the guild room train_on_trip no longer held (no way
+    # "toward where I am" from where I am) and go_to_leader took her out: four times, no practice
+    p = PartyHarness(memoria_proto, ["Vallen", "Elysia"])
+    together(p, ["Vallen", "Elysia"], vnum=3004)
+    ctx = p.rt["Elysia"].ctx
+    door = ctx._guild_door()
+    guild = memoria_proto.graph.rooms_named(p.rt["Elysia"].program.policies["guild_room"])[0]
+    p.room("Elysia", guild)
+    assert door is not None and ctx._guild_door() == door
