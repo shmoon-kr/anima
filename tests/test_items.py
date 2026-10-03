@@ -160,3 +160,21 @@ def test_a_full_bag_junks_extra_lights_but_keeps_one_to_spare(memoria_proto):
     assert "junk torch" in out, out
     h.ev("items.inventory", items=[{"text": "a torch", "count": 2}, {"text": "a bread", "count": 1}])
     assert h.rt.ctx._surplus_item(["food", "drinkcon", "light", "key"]) is None, "two kept"
+
+
+def test_a_shared_name_is_bought_by_its_number_in_the_list(memoria_proto):
+    # Mundi: 'buy plate' took the bronze breast plate (840) for the breast plate (216); the keeper
+    # said "You can't afford it!" ~100 times. Every keyword of the breast plate is the bronze one's too.
+    h = agent(memoria_proto, "Vallen", vnum=shop_room(memoria_proto, ARMORY), gold=400)
+    items = h.rt.ctx.items
+    want = items._buy_choice(items.shop_here(), 100)
+    assert want is not None
+    shared = all(any(kw in memoria_proto.world.objs[v].keywords for v in items.shop_here().products
+                     if memoria_proto.world.objs[v].short != want.short) for kw in want.keywords)
+    assert want.short == "a breast plate" and shared, "the case: every keyword shared with the bronze one"
+    assert items.buy_here(100) is None and items.list_needed(100)
+    h.advance(10)
+    assert "list" in h.take()
+    stock = [memoria_proto.world.objs[v].short for v in items.shop_here().products]
+    h.ev("shop.list", items=[{"text": t, "price": 1} for t in stock])
+    assert items.buy_here(100) == f"#{stock.index(want.short) + 1}"

@@ -201,11 +201,37 @@ class Items:
         return long_thirst or (int(self._pol("drink_min", 0)) > 0 and not self._has_type("drinkcon"))
 
     def buy_here(self, reserve: int) -> str | None:
+        """What to say after `buy`: a keyword no other product here has, else the item's number in this
+        shop's list (`#N`, shop.c get_purchase_obj): 'plate' bought the bronze breast plate (840) and
+        not the breast plate (216), and the keeper said "You can't afford it!" a hundred times.
+        None if there is nothing to buy or the list is needed first (list_needed)."""
         sh = self.shop_here()
         o = self._buy_choice(sh, reserve) if sh else None
-        if o is not None:
+        if o is None:
+            return None
+        word = self._purchase_word(o, sh)
+        if word is not None:
             self.bought[o.short] = o          # in the bag it is this one, not every object of its name
-        return self._kw(o.short) if o else None
+        return word
+
+    def _purchase_word(self, o: Obj, sh: Shop) -> str | None:
+        others = [self.ctx.memoria.world.objs[v] for v in sh.products
+                  if v in self.ctx.memoria.world.objs and self.ctx.memoria.world.objs[v].short != o.short]
+        for kw in o.keywords:
+            if not any(kw.lower() in (k.lower() for k in x.keywords) for x in others):
+                return kw
+        st = self.ctx.state
+        if st.shop_list and st.shop_list_room == st.room.get("name"):
+            for i, it in enumerate(st.shop_list, 1):
+                if str(it.get("text", "")).lower() == o.short.lower():
+                    return f"#{i}"
+        return None
+
+    def list_needed(self, reserve: int) -> bool:
+        """A purchase whose name is shared here and no list of this shop yet: ask for the list."""
+        sh = self.shop_here()
+        o = self._buy_choice(sh, reserve) if sh else None
+        return o is not None and self._purchase_word(o, sh) is None
 
     # ------------------------------------------------------------ the party's shopping trip
     def shop_wants(self, keep: list[str], reserve: int, sell_at: int) -> list[int]:

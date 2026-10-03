@@ -235,6 +235,7 @@ class Context:
             "gear_gift": lambda: self.items.gear_gift(),
             "sellable_here": lambda keep: self.items.sellable_here(keep),
             "buy_here": lambda reserve: self.items.buy_here(reserve),
+            "list_needed": lambda reserve: self.items.list_needed(reserve),
             "pickup_item": lambda min_cost: self.items.pickup_item(min_cost),
         }
         for name, fn in {

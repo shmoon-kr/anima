@@ -199,6 +199,12 @@ behaviors:
     considerations: ["bool(sellable_here(policy.inv_keep))"]
     do: ["stand()", "mark('shopping')", "send('sell ' + sellable_here(policy.inv_keep))", "send('inventory')"]
     every_s: 3
+  list_here:                          # 살 물건의 이름이 겹치면 (breast plate 와 bronze breast plate) 목록 번호로 사야 한다
+    weight: 0.87
+    when: "room.shop and not self.fighting"
+    considerations: ["bool(list_needed(policy.gold_reserve))"]
+    do: ["send('list')"]
+    every_s: 10
   buy_here:
     weight: 0.86
     when: "room.shop and not self.fighting"

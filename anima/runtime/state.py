@@ -45,6 +45,8 @@ class AgentState:
     last_kill_t: float = NEVER
     last_fled_t: float = NEVER
     last_prompt_t: float = NEVER
+    shop_list: list = field(default_factory=list)   # the last `list` answer: [{text, price, ...}] in order
+    shop_list_room: str | None = None               # the room it was given in (by name)
     fled_who: str | None = None          # a mob that panicked while we fought it ...
     fled_seen_t: float = NEVER
     chase_dir: str | None = None         # ... and the way it went (chase it one room)
@@ -86,6 +88,8 @@ class AgentState:
         self._now = now
         self.last_seq = ev.seq or self.last_seq
         t, d = ev.type, ev.data
+        if t == "shop.list":
+            self.shop_list, self.shop_list_room = list(d.get("items", [])), self.room.get("name")
         if t == "prompt":
             self.last_prompt_t = now
             self.hp, self.mp, self.mv = d.get("hp"), d.get("mp"), d.get("mv")
