@@ -20,6 +20,7 @@ import json
 
 from anima.adapters.mundi_ws.adapter import MundiWsAdapter
 from anima.adapters.tbamud_text.parser import TbamudTextAdapter
+from anima import timescale
 from anima.bus import Bus
 from anima.protocol.commands import CommandQueue, Source
 from anima.protocol.envelope import Event, Stamper
@@ -43,7 +44,7 @@ class Session:
     bus: Bus
     stamper: Stamper
     interval: float = 0.25
-    clock: Callable[[], float] = time.monotonic
+    clock: Callable[[], float] = timescale.now
     connected: bool = False
     stopped: bool = False
     error: str | None = None

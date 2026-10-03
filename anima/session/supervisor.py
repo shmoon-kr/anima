@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from anima import timescale
 from anima.animus.overlay import Overlay
 from anima.animus.queue import AnimusQueue, FakeProvider
 from anima.bus import Bus
@@ -44,6 +45,7 @@ class Config:
     protocol: str = "telnet"                                  # [server] protocol: telnet (tbaMUD) or mundi
     characters: dict[str, dict[str, Any]] = field(default_factory=dict)   # [characters.NAME]: sex, lang (mundi)
     lang: str = "en"                                          # [server] lang: the screens' language (mundi: en, ko)
+    speed: float = 1.0                                        # [server] speed: game time x N (a Mundi run with --speed N)
 
     @classmethod
     def load(cls, root: Path = Path(".")) -> "Config":
@@ -70,7 +72,7 @@ class Config:
                    agents_dir=root / "agents", packages_dir=root / "packages",
                    recordings=sub(root / "recordings"), run_dir=sub(root / "run"), animus=local.get("animus", {}),
                    protocol=secret["server"].get("protocol", "telnet"), characters=secret.get("characters", {}),
-                   lang=secret["server"].get("lang", "en"))
+                   lang=secret["server"].get("lang", "en"), speed=float(secret["server"].get("speed", 1)))
 
 
 def _tintin_pass(path: Path) -> str:
@@ -112,6 +114,7 @@ class Supervisor:
         return out
 
     def build(self) -> None:
+        timescale.set_scale(self.cfg.speed)        # before any clock is read: game time x speed (Mundi --speed)
         self.memoria = Memoria.from_tbamud(self.cfg.world_dir, self.cfg.hazards)
         self.memoria.attach(self.bus)
         stamp = time.strftime("%Y%m%d-%H%M%S")
@@ -126,21 +129,21 @@ class Supervisor:
         programs = {n: load_agent(self.cfg.agents_dir / f"{n}.yaml", self.cfg.packages_dir) for n in self.agents}
         from anima.party.blackboard import PartyBoard
         first = programs[self.agents[0]].policies
-        self.party = PartyBoard.from_policies(self.memoria, first)
+        self.party = PartyBoard.from_policies(self.memoria, first, clock=timescale.now)
         self.cfg.run_dir.mkdir(parents=True, exist_ok=True)
         self.party.save_path = self.cfg.run_dir / "party.json"
         if first.get("zone_ladder"):
             from anima.party.ladder import Ladder
             self.party.ladder = Ladder(self.memoria, hub=lambda: self.memoria.locator(self.party.leader).vnum,
-                                       clock=time.time)
+                                       clock=timescale.wall)
         self.party.load()
         for name in self.agents:
             prog = programs[name]
-            st = Stamper(name)
+            st = Stamper(name, clock=timescale.wall)
             self._stamper[name] = st
             sess = Session(name, self.cfg.host, self.cfg.port, self.cfg.password, self.bus, st,
                            protocol=self.cfg.protocol, profile=self._profile(name, first))
-            rt = AgentRuntime(name, prog, self.memoria, self.bus, st, sess.send, time.monotonic,
+            rt = AgentRuntime(name, prog, self.memoria, self.bus, st, sess.send, timescale.now,
                               party=self.party, animus=self.animus)
             sess.on_text = lambda text, n=name: self._text(n, text)
             self.party.register(name, rt.state)
@@ -152,7 +155,7 @@ class Supervisor:
             self.agents, base=lambda n: self._base[n], rebuild=self._load,
             apply=lambda n, prog: self.runtimes[n].apply_values(prog),
             publish=lambda n, t, d: self.bus.publish(self._stamper[n].stamp(t, d)),
-            clock=time.time, is_room=lambda r: bool(self.memoria.graph.rooms_named(r)),
+            clock=timescale.wall, is_room=lambda r: bool(self.memoria.graph.rooms_named(r)),
             apply_party=self._apply_party, leader=self.party.leader,
             save_path=self.cfg.run_dir / "animus" / "overlay.json")
         self.overlay.load()
@@ -307,21 +310,21 @@ class Supervisor:
                 (self.cfg.run_dir / f).unlink(missing_ok=True)
 
     async def _start_later(self, name: str, delay: float) -> None:
-        await asyncio.sleep(delay)                      # leader first, the others a few seconds apart
+        await timescale.sleep(delay)                    # leader first, the others a few seconds apart
         await self.sessions[name].run()
 
     async def _tick_loop(self, name: str) -> None:
         rt = self.runtimes[name]
         last = 0.0
         while True:
-            now = time.monotonic()
+            now = timescale.now()
             if now - last >= 1.0:
                 rt.tick()
                 last = now
             else:
                 rt.tick_if_dirty()
             self.animus.expire_due()
-            await asyncio.sleep(FAST_TICK_S)
+            await timescale.sleep(FAST_TICK_S)
 
     async def _animus_loop(self) -> None:
         while True:

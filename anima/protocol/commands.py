@@ -8,6 +8,8 @@ from __future__ import annotations
 import asyncio
 import itertools
 import time
+
+from anima import timescale
 from dataclasses import asdict, dataclass, field
 from typing import Any, Awaitable, Callable
 
@@ -66,7 +68,7 @@ class CommandQueue:
     stamper: Stamper
     writer: Writer
     interval: float = 0.25
-    clock: Callable[[], float] = time.monotonic
+    clock: Callable[[], float] = timescale.now
     _queue: asyncio.PriorityQueue = field(default_factory=asyncio.PriorityQueue)
     _counter: itertools.count = field(default_factory=itertools.count)
     _password_pending: bool = False
@@ -101,7 +103,7 @@ class CommandQueue:
             _, _, item = await self._queue.get()
             wait = last + self.interval - self.clock()
             if wait > 0:
-                await asyncio.sleep(wait)
+                await timescale.sleep(wait)
             await self.writer(item.text)
             last = self.clock()
             self.bus.publish(self.stamper.stamp("command.sent", {

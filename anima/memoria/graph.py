@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import heapq
 import time
+
+from anima import timescale
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterable
@@ -42,7 +44,7 @@ class Conditions:
 
 class Graph:
     def __init__(self, world: World, hazards: Hazards | None = None,
-                 clock: Callable[[], float] = time.monotonic) -> None:
+                 clock: Callable[[], float] = timescale.now) -> None:
         self.world = world
         self.hazards = hazards or Hazards()
         self.clock = clock

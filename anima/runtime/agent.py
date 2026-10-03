@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from anima.animus.queue import AnimusQueue, Request
+from anima import timescale
 from anima.bus import Bus
 from anima.memoria import Memoria
 from anima.protocol.commands import Source
@@ -139,7 +140,7 @@ class AgentRuntime:
     async def run(self) -> None:
         while True:
             self.tick()
-            await asyncio.sleep(TICK_S)
+            await timescale.sleep(TICK_S)
 
     def _asks(self) -> None:
         if self.animus is None:

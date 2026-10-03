@@ -9,6 +9,8 @@ members' Sigils, based on these facts.
 from __future__ import annotations
 
 import time
+
+from anima import timescale
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -25,7 +27,7 @@ class PartyBoard:
     classes: dict[str, str] = field(default_factory=dict)
     circuit: list[str] = field(default_factory=list)
     save_path: Any = None                                       # where the current rally survives restarts
-    clock: Callable[[], float] = time.monotonic
+    clock: Callable[[], float] = timescale.now
     states: dict[str, Any] = field(default_factory=dict)        # name -> AgentState
     camp_start: float = 0.9                                     # D30: a member's rest need that makes the room camp
     camp_end: float = 0.3                                       # ... and the need below which nobody keeps it going
@@ -43,7 +45,7 @@ class PartyBoard:
     _camps: dict[Any, str | None] = field(default_factory=dict)  # room -> sentry while that room camps
 
     @classmethod
-    def from_policies(cls, memoria: Memoria, policies: dict[str, Any], clock: Callable[[], float] = time.monotonic):
+    def from_policies(cls, memoria: Memoria, policies: dict[str, Any], clock: Callable[[], float] = timescale.now):
         return cls(memoria, list(policies.get("roster", [])), policies.get("leader", ""),
                    {k: list(v) for k, v in (policies.get("roles") or {}).items()}, policies.get("rally"),
                    dict(policies.get("classes") or {}), list(policies.get("circuit") or []), clock=clock,
