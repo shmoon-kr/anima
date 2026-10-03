@@ -36,6 +36,15 @@ _SLOT_LABEL = {"light": "used as light", "finger_right": "worn on finger", "fing
                "wield": "wielded", "hold": "held"}      # the party's class words → Mundi's (crates/mundi-sim Class)
 
 
+def _how_good(percent: int) -> str:
+    """spell_parser.c how_good: the word the practice list shows for a proficiency."""
+    for top, word in ((0, "not learned"), (10, "awful"), (20, "bad"), (40, "poor"), (55, "average"),
+                      (70, "fair"), (80, "good"), (85, "very good")):
+        if percent <= top:
+            return word
+    return "superb"
+
+
 def mundi_class(name: str) -> str:
     return _CLASSES.get(name, name)
 
@@ -86,6 +95,9 @@ class MundiWsAdapter:
                 data["ok"] = True
             else:
                 data = {**data, "action": "buy", "ok": False, "reason": data.get("action")}
+        if env["type"] == "char.skills" and isinstance(data.get("skills"), list):
+            # PROTOCOL.md: {skills: {name: proficiency}}, the practice list's words; Mundi gives percents
+            data["skills"] = {k.get("name"): _how_good(int(k.get("percent", 0))) for k in data["skills"] if k.get("name")}
         if env["type"] == "items.equipment":
             data["slots"] = [{**sl, "slot": _SLOT_LABEL.get(sl.get("slot"), sl.get("slot"))} if isinstance(sl, dict) else sl
                              for sl in data.get("slots", [])]

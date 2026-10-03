@@ -149,3 +149,11 @@ def test_a_shop_failure_is_said_as_the_protocol_says_it():
 def test_already_following_names_the_leader():
     evs = MundiWsAdapter("Lil").feed(env("group.failed", {"reason": "already_following", "who": "Vallen"}))
     assert evs[1].type == "group.change" and evs[1].data == {"event": "following", "who": "Vallen"}
+
+
+def test_the_practice_list_is_named_by_proficiency_words():
+    # Ten rounds without a practice: Mundi's skills list went into the state as {"name": "percent"},
+    # next_skill found nothing, and practices piled up (a cleric had 20).
+    ev = MundiWsAdapter("Elysia").feed(env("char.skills", {"practices": 20, "spells": True, "skills": [
+        {"name": "cure light", "percent": 0}, {"name": "armor", "percent": 45}, {"name": "bless", "percent": 90}]}))[0]
+    assert ev.data["skills"] == {"cure light": "not learned", "armor": "average", "bless": "superb"}
