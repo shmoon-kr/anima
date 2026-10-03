@@ -17,6 +17,7 @@ from typing import Any, Callable
 from anima.memoria import Memoria
 
 
+TRAINING_HOLD_S = 20.0  # a member who set off for (or is in) a guild holds the trip stop this long
 CLAIM_S = 5.0          # a member going for a thing on the floor holds it this long
 
 
@@ -326,7 +327,7 @@ class PartyBoard:
         """Someone here is still buying or selling, or a member is training in a guild (out of the room)."""
         now = self.clock()
         return any(now - self.states[n].marks.get("shopping", -1e9) < 6 for n in self.in_room_with(agent)) or \
-            any(now - self.states[n].marks.get("training", -1e9) < 6 for n in self.online())
+            any(now - self.states[n].marks.get("training", -1e9) < TRAINING_HOLD_S for n in self.online())
 
     def trip_progress(self, agent: str) -> None:
         """Leader at a stop: stay until nobody has bought or sold for a few seconds, then move on."""

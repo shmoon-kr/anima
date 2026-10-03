@@ -484,8 +484,11 @@ def test_a_member_trains_at_its_guild_door_on_the_town_run(memoria_proto):
     guild = p.mem.graph.rooms_named(p.rt["Elysia"].program.policies["guild_room"])[0]
     inward = p.mem.graph.path(door, guild, p.mem.conditions())[0]
     assert inward in sent, sent
-    p.rt["Elysia"].state.marks["training"] = p.t
-    assert p.board.shop_busy("Vallen"), "the trip waits while she trains"
+    # round 78: the trip moved on while she walked in (the mark came only with practising); she
+    # turned back at the guild, and set off again: 300 steps, out of movement
+    assert p.board.shop_busy("Vallen"), "the trip waits from the moment she sets off"
+    p.tick(15)
+    assert p.board.shop_busy("Vallen"), "and while she is on her way in"
 
 
 def test_the_floor_forgets_what_others_took(memoria_proto):

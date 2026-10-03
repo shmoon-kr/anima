@@ -287,7 +287,7 @@ tasks:
   train_at_guild:
     timeout_s: 900
     steps:
-      - do: ["stand()"]
+      - do: ["stand()", "mark('training')"]     # 나가는 순간부터: 리더가 다음 정거장으로 가 버리면 돌아섰다 (round 78)
       - go_to: "policy.guild_room"
       - repeat:
           do: ["mark('training')", "practice(next_skill(policy.skill_plan))", "send('practice')"]
