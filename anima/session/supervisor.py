@@ -46,6 +46,9 @@ class Config:
     characters: dict[str, dict[str, Any]] = field(default_factory=dict)   # [characters.NAME]: sex, lang (mundi)
     lang: str = "en"                                          # [server] lang: the screens' language (mundi: en, ko)
     speed: float = 1.0                                        # [server] speed: game time x N (a Mundi run with --speed N)
+    web_port: int = 0                                         # [web] port: the browsers' view stream (gateway.py), 0 = off
+    stream_key: str = ""                                      # [web] stream_key: the key the web app signs tokens with
+    profile: str = ""                                         # ANIMA_PROFILE: what a token is for (its target)
 
     @classmethod
     def load(cls, root: Path = Path(".")) -> "Config":
@@ -72,7 +75,9 @@ class Config:
                    agents_dir=root / "agents", packages_dir=root / "packages",
                    recordings=sub(root / "recordings"), run_dir=sub(root / "run"), animus=local.get("animus", {}),
                    protocol=secret["server"].get("protocol", "telnet"), characters=secret.get("characters", {}),
-                   lang=secret["server"].get("lang", "en"), speed=float(secret["server"].get("speed", 1)))
+                   lang=secret["server"].get("lang", "en"), speed=float(secret["server"].get("speed", 1)),
+                   web_port=int(secret.get("web", {}).get("port", 0)), stream_key=secret.get("web", {}).get("stream_key", ""),
+                   profile=profile or "default")
 
 
 def _tintin_pass(path: Path) -> str:
@@ -292,6 +297,13 @@ class Supervisor:
         self.cfg.run_dir.mkdir(parents=True, exist_ok=True)
         (self.cfg.run_dir / "anima.pid").write_text(str(os.getpid()))
         server = await asyncio.start_unix_server(self._control, path=str(self.cfg.run_dir / "anima.sock"))
+        web = None
+        if self.cfg.web_port and self.cfg.stream_key:     # atrium's spectator page (read-only)
+            from anima.session.cli import describe
+            from anima.session.gateway import Gateway
+            from anima.session.humans import describe_for_narration
+            web = await Gateway(self, self.cfg.stream_key, self.cfg.profile, describe, describe_for_narration) \
+                .serve("127.0.0.1", self.cfg.web_port)
         self._tasks.append(asyncio.create_task(self.animus.run()))
         self._tasks.append(asyncio.create_task(self._animus_loop()))
         for i, name in enumerate(self.agents):
@@ -305,6 +317,8 @@ class Supervisor:
             for t in self._tasks:
                 t.cancel()
             server.close()
+            if web is not None:
+                web.close()
             self.recorder.close()
             for f in ("anima.sock", "anima.pid"):
                 (self.cfg.run_dir / f).unlink(missing_ok=True)
@@ -345,7 +359,8 @@ class Supervisor:
             out[name] = {"connected": sess.connected, "in_game": s.in_game, "error": sess.error,
                          "hp": s.hp, "hp_max": s.hp_max, "mp": s.mp, "mv": s.mv, "position": s.position,
                          "room": s.room.get("name"), "vnum": loc.vnum, "behavior": rt.ctx.behavior,
-                         "task": rt.tasks.name, "scores": rt.selector.last_scores[:3]}
+                         "task": rt.tasks.name, "scores": rt.selector.last_scores[:3],
+                         "class": self.party.classes.get(name), "level": s.level}
         return out
 
     def _to_watchers(self, ev: Event) -> None:

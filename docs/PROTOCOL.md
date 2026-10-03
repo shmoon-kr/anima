@@ -224,6 +224,23 @@ LLM 은 느린 감각기관이다. 질문은 비동기, 답은 이벤트로 온�
 - 녹화는 원래 관점(`"self"`) 그대로 남긴다. 합칠 때 §8 로 정규화.
 - 비밀은 §5 에 따라 남지 않는다. 녹화를 공유하거나 관전 화면에 흘려도 안전해야 한다.
 
+
+## 11. 관전 스트림 (웹, 읽기 전용)
+사람이 보는 화면용. 에이전트 계약(§1–§9)과 별개이고, 터미널의 `anima play` 와 같은 `view` 를 웹으로 낸 것 (`anima/session/gateway.py`).
+- 주소: `ws://127.0.0.1:<[web] port>/ws/view?token=<토큰>&agent=<처음 볼 캐릭터>` (Caddy 가 `/ws/*` 를 여기로)
+- 토큰: `base64url(json) . base64url(HMAC-SHA256)`, 키는 웹 앱과 anima 가 나눠 가진 `[web] stream_key`. 내용 `{user, target, exp}`.
+  `target` 은 이 anima 의 프로필(`ANIMA_PROFILE`, 없으면 `default`), `exp` 는 만료 시각(유닉스 초). 틀리면 닫음 코드 4401
+- 서버 → 브라우저 (JSON 한 줄씩):
+
+| k | 내용 |
+|---|---|
+| `text` | `{a, s, reset?}` — 서버가 그린 색 있는 글 (ANSI). `reset: true` 는 캐릭터를 바꿨을 때의 최근 화면 |
+| `status` | `{party: {이름: {hp, hp_max, mp, mp_max, mv, mv_max, position, room, vnum, behavior, task, class, level, connected, in_game, …}}}` — 1초마다 |
+| `narr` | `{a, s}` — 해설 한 줄 (터미널의 narrate 와 같은 말) |
+| `evline` | `{a, s}` — 이벤트 한 줄 (터미널의 events 와 같은 말) |
+
+- 브라우저 → 서버: `{"agents": [이름]}` (볼 캐릭터 바꾸기) 만. 입력 줄·명령은 받지 않는다 (첫 버전은 보기 전용)
+
 ---
 
 ## 변경 기록
@@ -236,3 +253,4 @@ LLM 은 느린 감각기관이다. 질문은 비동기, 답은 이벤트로 온�
 - v0 (2026-10-03, 2부 §7, 호환 추가): `runtime.human` (사람의 입력과 조종권).
 - v0 (2026-10-03, 호환 추가): `runtime.error`.
 - v0 (2026-10-03, 호환 추가): `items.inventory`·`items.equipment`·`items.used` 의 `vnum?` — 서버가 물건 id 를 주면 그 물건의 원형 번호. 같은 이름의 물건이 여럿이라 이름만으로는 어느 것인지 모른다.
+- v0 (2026-10-04, 호환 추가): §11 관전 스트림 (웹). `status` 에 `class`, `level`.
