@@ -41,10 +41,16 @@ class Config:
     recordings: Path = Path("recordings")
     run_dir: Path = Path("run")
     animus: dict[str, Any] = field(default_factory=dict)     # config/anima.toml [animus]; empty = phase-1 fakes
+    protocol: str = "telnet"                                  # [server] protocol: telnet (tbaMUD) or mundi
+    characters: dict[str, dict[str, Any]] = field(default_factory=dict)   # [characters.NAME]: sex, lang (mundi)
 
     @classmethod
     def load(cls, root: Path = Path(".")) -> "Config":
-        secret = tomllib.loads((root / "config" / "secret.toml").read_text())
+        """ANIMA_PROFILE=NAME: config/secret.NAME.toml, run/NAME, recordings/NAME (a second world,
+        e.g. Anima Mundi, beside the running party without sharing its files)."""
+        profile = os.environ.get("ANIMA_PROFILE", "")
+        secret = tomllib.loads((root / "config" / (f"secret.{profile}.toml" if profile else "secret.toml")).read_text())
+        sub = (lambda p: p / profile) if profile else (lambda p: p)
         local = {}
         if (root / "config" / "anima.toml").exists():
             local = tomllib.loads((root / "config" / "anima.toml").read_text())
@@ -61,7 +67,8 @@ class Config:
                                   or paths.get("world_dir", "../tbamud/lib/world")).expanduser(),
                    hazards=root / paths.get("hazards", "third_party/tbamud/hazards.yaml"),
                    agents_dir=root / "agents", packages_dir=root / "packages",
-                   recordings=root / "recordings", run_dir=root / "run", animus=local.get("animus", {}))
+                   recordings=sub(root / "recordings"), run_dir=sub(root / "run"), animus=local.get("animus", {}),
+                   protocol=secret["server"].get("protocol", "telnet"), characters=secret.get("characters", {}))
 
 
 def _tintin_pass(path: Path) -> str:
@@ -92,6 +99,16 @@ class Supervisor:
     _viewers: list[tuple[set[str], asyncio.Queue]] = field(default_factory=list)   # (agents, queue) of `view`
     _screen: dict[str, Any] = field(default_factory=dict)                          # agent -> recent coloured text
 
+    def _profile(self, name: str, policies: dict[str, Any]) -> dict[str, Any]:
+        """What a Mundi login says about the character: its class from the party's `classes`, and
+        sex or language from [characters.NAME] in the secret file."""
+        out = dict(self.cfg.characters.get(name, {}))
+        cls = (policies.get("classes") or {}).get(name)
+        if cls and "class" not in out:
+            from anima.adapters.mundi_ws.adapter import mundi_class
+            out["class"] = mundi_class(cls)
+        return out
+
     def build(self) -> None:
         self.memoria = Memoria.from_tbamud(self.cfg.world_dir, self.cfg.hazards)
         self.memoria.attach(self.bus)
@@ -119,7 +136,8 @@ class Supervisor:
             prog = programs[name]
             st = Stamper(name)
             self._stamper[name] = st
-            sess = Session(name, self.cfg.host, self.cfg.port, self.cfg.password, self.bus, st)
+            sess = Session(name, self.cfg.host, self.cfg.port, self.cfg.password, self.bus, st,
+                           protocol=self.cfg.protocol, profile=self._profile(name, first))
             rt = AgentRuntime(name, prog, self.memoria, self.bus, st, sess.send, time.monotonic,
                               party=self.party, animus=self.animus)
             sess.on_text = lambda text, n=name: self._text(n, text)

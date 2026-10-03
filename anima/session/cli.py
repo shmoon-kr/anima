@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -102,7 +103,9 @@ def main(argv: list[str] | None = None) -> int:
     return 1
 
 
-RUN_DIR = Path("run")
+PROFILE = os.environ.get("ANIMA_PROFILE", "")     # e.g. "mundi": its own secret file, run dir, recordings, log
+RUN_DIR = Path("run") / PROFILE if PROFILE else Path("run")
+LOG = Path("logs") / (f"anima-{PROFILE}.out" if PROFILE else "anima.out")
 
 
 def _agent_names(given: list[str]) -> list[str]:
@@ -122,10 +125,10 @@ def _run(args: argparse.Namespace) -> int:
     names = _agent_names(args.agents)
     if args.cmd == "start":
         Path("logs").mkdir(exist_ok=True)
-        out = open("logs/anima.out", "a")
+        out = open(LOG, "a")
         proc = subprocess.Popen([sys.executable, "-m", "anima.session.cli", "run", *names], stdout=out,
                                 stderr=subprocess.STDOUT, start_new_session=True)
-        print(f"started pid {proc.pid}: {' '.join(names)}  (log: logs/anima.out)")
+        print(f"started pid {proc.pid}: {' '.join(names)}  (log: {LOG})")
         return 0
     from anima.session.supervisor import Config, Supervisor
     sup = Supervisor(Config.load(Path(".")), names)
