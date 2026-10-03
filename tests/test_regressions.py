@@ -635,3 +635,21 @@ def test_a_follower_waits_for_the_leaders_group_before_joining(memoria_proto):
     p.ev("Vallen", "group.change", event="new_leader", who="Vallen", formed=True)
     p.tick(6)
     assert "group join Vallen" in p.take("Elysia")
+
+
+def test_leader_waits_until_everyone_follows_before_going_home(memoria_proto):
+    # round 61: at login the leader set off home once all were in the room, before they followed;
+    # their `group join` went out after he had left ("no one by that name here")
+    p = PartyHarness(memoria_proto, ["Vallen", "Lil"])
+    together(p, ["Vallen", "Lil"], vnum=3001, following=False)    # the temple: away from the rally
+    p.ev("Vallen", "group.change", event="new_leader", who="Vallen")
+    p.ev("Lil", "char.skills", skills={})
+    p.take("Vallen")
+    for _ in range(3):
+        p.tick(3)
+    assert not [t for t in p.take("Vallen") if t in MOVES]
+    p.ev("Lil", "group.change", event="following", who="Vallen")
+    p.ev("Lil", "group.change", event="joined", who="Lil")
+    for _ in range(3):
+        p.tick(3)
+    assert [t for t in p.take("Vallen") if t in MOVES]

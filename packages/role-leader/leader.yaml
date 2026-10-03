@@ -12,7 +12,7 @@ behaviors:
   shopping_trip:
     weight: 0.8
     when: "not self.fighting and party.trip_stop != null and not party.camping"
-    considerations: ["bool(party.all_here)", "bool(not party.resting)"]
+    considerations: ["bool(party.all_here)", "bool(party.all_following)", "bool(not party.resting)"]
     do: ["stand()", "go_to(party.trip_stop)", "trip_progress()"]
     every_s: 1
   form_group:
@@ -60,7 +60,8 @@ behaviors:
     animus_weight: [0.3, 0.74]           # 효율 행동: Animus 가 이 범위에서 가중치를 바꿀 수 있다 (D27)
     weight: 0.65
     when: "not self.fighting and party.is_leader and party.rally != null and not in_zone_of(party.rally)"
-    considerations: ["bool(party.all_here)", "bool(not party.resting)"]
+    # 모두 따라붙은 뒤에 (방에 모였어도 follow 전이면 떠나는 순간 들어오려던 명령이 허공에, round 61)
+    considerations: ["bool(party.all_here)", "bool(party.all_following)", "bool(not party.resting)"]
     do: ["stand()", "go_to(party.rally)"]
     every_s: 1
   move_hunting_ground:                 # 거점 지역에서 5분 넘게 킬이 없으면 순환 목록의 다음 거점으로 (리젠 대기)
