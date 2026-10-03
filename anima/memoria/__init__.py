@@ -71,8 +71,13 @@ class Memoria:
         t = ev.type
         if t == "world.time":
             self.night = ev.data.get("phase") in ("sunset", "night")
-        elif t == "zone.above_level" and loc.vnum is not None:
-            self.above_level_zones.add(self.world.rooms[loc.vnum].zone)
+        elif t == "zone.above_level":
+            # The warning comes before the move (act.movement.c:218): the zone is the one being
+            # entered, not the one we still stand in. Unknown way: mark nothing rather than the wrong
+            # zone (marking the town we stood in cut every path through it).
+            ex = self.world.rooms[before].exits.get(pending) if before in self.world.rooms and pending else None
+            if ex is not None and ex.to in self.world.rooms:
+                self.above_level_zones.add(self.world.rooms[ex.to].zone)
         elif t == "move.failed":
             reason = ev.data.get("reason")
             if before is not None and pending:

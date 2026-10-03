@@ -341,3 +341,16 @@ def test_autoassist_found_off_is_turned_back_on(memoria_proto):
     p.ev("Carmilla", "toggle.state", name="autoassist", value=False)
     p.tick()
     assert "autoassist" in p.take("Carmilla")
+
+
+def test_the_above_level_warning_marks_the_zone_entered_not_the_one_left(memoria_proto):
+    # Mundi: stepping out of Midgaard's east gate toward Miden'nir (35) marked Midgaard (30) itself;
+    # every way through the city was then avoided and the leader gave up on the newbie zone forever.
+    p = PartyHarness(memoria_proto, ["Vallen"])
+    p.enter("Vallen", 3053)                                   # outside the east gate of Midgaard
+    way = next(d for d, e in p.mem.world.rooms[3053].exits.items() if p.mem.world.rooms[e.to].zone != 30)
+    p.ev("Vallen", "command.sent", text=way, source={"kind": "behavior", "id": "x/y"})
+    p.ev("Vallen", "zone.above_level")
+    entered = p.mem.world.rooms[p.mem.world.rooms[3053].exits[way].to].zone
+    assert p.mem.above_level_zones == {entered} and 30 not in p.mem.above_level_zones
+    assert p.mem.graph.path(3053, NEWBIE_ENTRANCE, p.mem.conditions()) is not None
