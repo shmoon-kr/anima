@@ -68,7 +68,7 @@ def _also(type_: str, d: dict) -> list[tuple[str, dict]]:
     reason = d.get("reason")
     if type_ == "position.refused" and reason == "already" and d.get("command") in _ALREADY:
         return [("position", {"position": _ALREADY[d["command"]]})]          # "You are already standing."
-    if type_ == "group.failed" and reason == "already_in_group":
+    if type_ == "group.failed" and reason in ("already_in_group", "already_part"):     # `group new` / `group join`
         return [("group.change", {"event": "joined", "who": SELF})]             # "But you are already part of a group."
     if type_ == "group.failed" and reason == "already_following":
         return [("group.change", {"event": "following", "who": d.get("who")})]  # "You are already following $M." (Mundi names $M)

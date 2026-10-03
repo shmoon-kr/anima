@@ -123,6 +123,9 @@ def test_what_mundi_says_its_own_way_also_comes_as_the_protocols_event():
     a = MundiWsAdapter("Vallen")
     types = lambda frame: [(e.type, e.data) for e in a.feed(frame)][1:]
     assert types(env("group.failed", {"reason": "already_in_group"})) == [("group.change", {"event": "joined", "who": "self"})]
+    # round 31: after a restart the server still had everyone grouped; `group join` said
+    # "But you are already part of a group." 73 times
+    assert types(env("group.failed", {"reason": "already_part"})) == [("group.change", {"event": "joined", "who": "self"})]
     assert types(env("door.failed", {"reason": "seems_locked", "door": "door"})) == [("move.failed", {"reason": "locked"})]
     for action in ("drop", "junk"):
         assert types(env("items.failed", {"action": action, "reason": "cursed", "text": "a ring"})) == \
