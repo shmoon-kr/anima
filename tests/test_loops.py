@@ -144,3 +144,14 @@ def test_kicks_after_each_fights_end_are_not_a_flood():
         answer(g, clock, "rescue Carmilla", [("skill.result", {"skill": "rescue", "ok": False, "reason": "nobody_fighting"})],
                source="class-warrior/rescue")
     assert g.paused("class-warrior/rescue", "rescue Carmilla") == 0 and not seen
+
+
+def test_a_look_whose_answer_came_late_is_not_a_loop_but_a_flood_still_is():
+    # round 63: `look` after being woken, its room view counted for the next command
+    g, clock, seen = guard()
+    for _ in range(4):
+        answer(g, clock, "look", [], source="base/stand_when_woken", kind="reflex")
+    assert g.paused("base/stand_when_woken", "look") == 0 and not seen
+    for _ in range(10):
+        answer(g, clock, "look", [], source="base/stand_when_woken", kind="reflex")
+    assert seen, "nine looks in a minute is still a flood"

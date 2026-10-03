@@ -26,6 +26,7 @@ FLOOD = 8             # the same command from the same source more than this man
 _PROGRESS = {"room", "room.dark", "combat.hit", "combat.death", "exp.gain", "items.got", "items.received",
              "items.gave", "items.used", "shop.result", "level.up", "char.practiced"}
 GUARDED = ("behavior", "reflex", "task")
+_LOOKS = {"look", "inventory", "equipment", "score", ""}   # they only ask; an empty line asks for the prompt
 _FAILURE_TYPES = {"unknown", "items.cannot_take", "items.cannot_drop", "items.not_found", "items.give_failed"}
 
 
@@ -110,6 +111,10 @@ class LoopGuard:
                 self._sent[key] = []
                 self._hold(key, (("repeated", str(len(times))),), len(times))
                 return
+        if answer == (("nothing", ""),) and text.split(" ", 1)[0] in _LOOKS:
+            # a look's answer (the room) often comes after the next command and is counted there:
+            # "nothing" says little about it (round 63). The flood rule above still counts it.
+            return
         if answer is None:                                    # it did something: start over
             self._streaks.pop(key, None)
             self._level.pop(key, None)
