@@ -109,6 +109,13 @@ class AgentState:
             # Mundi has only some of tbaMUD's spells so far: one it lacks is not cast or practised
             # again (round 20: a spell was cast into "not in Mundi yet")
             self.missing.add(self.last_cast)
+        if t == "items.failed" and d.get("action") == "drink" and d.get("reason") == "empty":
+            self.drink_empty_t = self._now
+            self.marks["drink_empty"] = self._now
+        if t == "items.failed" and d.get("action") == "fill" and d.get("reason") in ("no_room", "other_liquid"):
+            # full, or something else in it: nothing to fill until it is drunk (round 21: never thirsty,
+            # every fountain on the way got "There is no room for more.")
+            self.marks["filled"] = self._now
         if t == "shop.list":
             self.shop_list, self.shop_list_room = list(d.get("items", [])), self.room.get("name")
         elif t == "shop.result" and d.get("ok", True) or t == "comm.tell" and now - self.last_buy_t < BUY_ANSWER_S:
@@ -288,6 +295,9 @@ class AgentState:
                 self.marks["drink_empty"] = self._now
             else:
                 self.thirsty = False
+                self.marks["drank"] = self._now          # room for more now: worth a fill at a fountain
+        elif action == "fill":
+            self.marks["filled"] = self._now
         elif action == "hold" and self.item_type(text) == "light":
             self.has_light = True
 

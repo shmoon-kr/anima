@@ -214,7 +214,8 @@ behaviors:
   fill_at_fountain:                   # 분수대에서 물통 채우기 (마을 다녀오기의 한 정거장, D33)
     weight: 0.86
     when: "room.has_fountain and not self.fighting and has_item('drinkcon')"
-    considerations: ["step(secs_since('filled'), 600)"]
+    # 채운 뒤에 마셨거나 비었다는 걸 알았을 때만 (가득 찬 것은 "There is no room for more.")
+    considerations: ["bool(secs_since('drank') < secs_since('filled') or secs_since('drink_empty') < secs_since('filled'))"]
     do: ["stand()", "mark('shopping')", "send('fill ' + item_of('drinkcon') + ' fountain')", "mark('filled')"]
     every_s: 3
   pick_up:

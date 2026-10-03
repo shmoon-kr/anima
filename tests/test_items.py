@@ -134,7 +134,17 @@ def test_containers_are_filled_at_the_fountain(memoria_proto):
          objects=[{"text": "A large fountain carved from blue-streaked marble is here, bubbling merrily.", "count": 1}],
          dark=False)
     h.advance(4)
+    assert not any(t.startswith("fill") for t in h.take()), "full since it was bought: nothing to fill"
+    h.ev("items.used", action="drink", text="a canteen")
+    h.advance(4)
     assert "fill canteen fountain" in h.take() and h.rt.state.marks.get("shopping")
+    h.ev("items.failed", action="fill", reason="no_room")
+    for _ in range(3):
+        h.advance(600)
+    assert not any(t.startswith("fill") for t in h.take()), "round 21: 'no room for more' at every fountain"
+    h.ev("items.failed", action="drink", reason="empty", text="a canteen")
+    h.advance(4)
+    assert "fill canteen fountain" in h.take(), "found empty: fill it"
 
 
 def test_a_member_without_a_container_buys_a_canteen(memoria_proto):
