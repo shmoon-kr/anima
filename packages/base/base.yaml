@@ -154,7 +154,8 @@ behaviors:
   recount_party:                      # 추정으로는 같이 있는데 목록에 없다: 방 목록이 낡았다
     weight: 0.3
     when: "not self.fighting and self.position != 'sleeping'"
-    considerations: ["step(party.unseen_here, 1)"]
+    # 막 들어온 방: 따라온 파티원의 도착 소식은 0.2초쯤 늦게 온다 (그때마다 look 하면 한 판에 90번)
+    considerations: ["step(party.unseen_here, 1)", "step(secs_since('room_seen'), 2)"]
     do: ["send('look')"]
     every_s: 15
   eat:

@@ -205,6 +205,7 @@ class AgentState:
         elif t == "items.gave":
             self._drop_item(d.get("text", ""))
         elif t == "room":
+            self.marks["room_seen"] = now
             self.room, self.room_dark = d, False
         elif t == "room.dark":
             self.room, self.room_dark = {"name": None, "occupants": [], "objects": [], "exits": []}, True

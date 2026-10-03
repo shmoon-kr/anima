@@ -525,3 +525,17 @@ def test_login_housekeeping_queues_behind_what_behaviors_send(memoria_proto):
     enter_game(h)
     prio = {s[0]: s[2] for s in h.sent}
     assert prio.get("autoloot") == 1 and prio.get("inventory") == 1, prio
+
+
+def test_members_arriving_a_moment_after_me_are_not_recounted(memoria_proto):
+    # round 30: their own room views come before word of their arrival reaches the leader, so
+    # right after each step all five were "unseen" and the leader looked again: ~90 looks a round
+    p = PartyHarness(memoria_proto, ["Vallen", "Elysia"])
+    together(p, ["Vallen", "Elysia"])
+    p.take("Vallen")
+    p.rt["Vallen"].state.room["occupants"] = []
+    p.rt["Vallen"].state.marks["room_seen"] = p.t           # the leader just walked in
+    p.tick(1)
+    assert "look" not in p.take("Vallen"), "a moment: they are on their way in"
+    p.tick(3)
+    assert "look" in p.take("Vallen"), "still not listed after a while: the listing is stale"
