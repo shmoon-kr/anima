@@ -11,7 +11,7 @@ def shop_room(mem, vnum):
     return mem.world.shops[vnum].rooms[0]
 
 
-WEAPONS, ARMORY, BAKERY = 3003, 3004, 3001
+WEAPONS, ARMORY, BAKERY, GENERAL = 3003, 3004, 3001, 3002
 
 
 def agent(mem, name, vnum=NEWBIE_ENTRANCE, gold=0, inventory=(), equipment=()):
@@ -118,3 +118,25 @@ def test_after_the_town_run_the_party_hunts_somewhere_else(memoria_proto):
     p.board.trip = {"stops": [], "visited": [], "arrived": None, "started": p.t}
     assert p.board.trip_stop() is None                       # nothing left: the trip ends
     assert p.board.rally == p.board.circuit[1]
+
+
+def test_a_bought_light_is_held_and_not_bought_again(memoria_proto):
+    # Mundi: "a torch" names 13 world objects, one a fixture and one anti-good; buying saw the shop's
+    # torch as an upgrade, wearing judged every torch and never held it, and buy torch ran ~100 times.
+    h = agent(memoria_proto, "Vallen", vnum=shop_room(memoria_proto, GENERAL), gold=500)
+    names = {"torch": "a torch", "lantern": "a lantern"}
+    bag, sent = [], []
+    for _ in range(8):                                   # the server's side: what is bought is in the bag
+        h.advance(5)
+        out = h.take()
+        sent += out
+        for t in out:
+            if t.startswith("buy ") and t.split()[1] in names:
+                bag.append(names[t.split()[1]])
+            if t.startswith("hold ") and names.get(t.split()[1]) in bag:
+                bag.remove(names[t.split()[1]])
+                h.ev("items.equipment", slots=[{"slot": "used as light", "text": names[t.split()[1]]}])
+        h.ev("items.inventory", items=[{"text": b, "count": 1} for b in bag])
+    buys = [t for t in sent if t.startswith("buy ")]
+    assert any(t.startswith("hold ") for t in sent), sent
+    assert len(buys) <= 2, f"a light or two, not a pile: {buys}"

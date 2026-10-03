@@ -44,6 +44,7 @@ class AgentState:
     last_fight_t: float = NEVER
     last_kill_t: float = NEVER
     last_fled_t: float = NEVER
+    last_prompt_t: float = NEVER
     fled_who: str | None = None          # a mob that panicked while we fought it ...
     fled_seen_t: float = NEVER
     chase_dir: str | None = None         # ... and the way it went (chase it one room)
@@ -86,6 +87,7 @@ class AgentState:
         self.last_seq = ev.seq or self.last_seq
         t, d = ev.type, ev.data
         if t == "prompt":
+            self.last_prompt_t = now
             self.hp, self.mp, self.mv = d.get("hp"), d.get("mp"), d.get("mv")
             for cur, attr in ((self.hp, "hp_max"), (self.mp, "mp_max"), (self.mv, "mv_max")):
                 if cur is not None and (getattr(self, attr) is None or cur > getattr(self, attr)):

@@ -27,6 +27,7 @@ class Items:
         self.ctx = ctx
         self._shop_rooms: dict[int, Shop] | None = None
         self._wants: tuple[float, list[int]] = (-1e9, [])
+        self.bought: dict[str, Obj] = {}      # a name we bought -> the very object (a shop knows which)
 
     # ------------------------------------------------------------ lookups
     @property
@@ -71,7 +72,12 @@ class Items:
     def _upgrade_text(self, text: str, eq: dict[str, list[Obj | None]] | None = None):
         """For a seen name: an upgrade only if every world object with that name is one (smallest gain).
         A name can stand for a usable and an unusable object (one restricted to some classes, one not)."""
-        cands = self.k.items(text)
+        if text in self.bought:
+            cands = [self.bought[text]]                # we bought it: we know which object it is
+        else:
+            # in a bag only what can be taken: a fixture of the same name (a torch on a wall) is not it
+            named = self.k.items(text)
+            cands = [o for o in named if "take" in o.wear] or named
         if not cands:
             return None
         eq = self.equipped() if eq is None else eq
@@ -156,8 +162,10 @@ class Items:
             o = self.ctx.memoria.world.objs.get(v)
             if o is None or self.price(o, sh) > gold:
                 continue
-            up = self._upgrade(o, eq)
-            if up and not any(self._obj(t) is o for t in self.ctx.state.inventory):
+            # judged as wearing will judge it (by the name it will have in the bag), and not when one
+            # with that name is already carried: else the shop sees an upgrade the bag never wears
+            up = self._upgrade(o, eq) and self._upgrade_text(o.short, eq) if o.short not in self.bought else self._upgrade(o, eq)
+            if up and o.short not in self.ctx.state.inventory:
                 if best is None or up[2] > best[0]:
                     best = (up[2], o)
         if best:
@@ -195,6 +203,8 @@ class Items:
     def buy_here(self, reserve: int) -> str | None:
         sh = self.shop_here()
         o = self._buy_choice(sh, reserve) if sh else None
+        if o is not None:
+            self.bought[o.short] = o          # in the bag it is this one, not every object of its name
         return self._kw(o.short) if o else None
 
     # ------------------------------------------------------------ the party's shopping trip

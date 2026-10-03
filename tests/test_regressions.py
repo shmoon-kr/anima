@@ -421,3 +421,23 @@ def test_spare_gear_goes_to_the_member_who_can_use_it(memoria_proto):
         p.tick()
         sent += p.take("Vallen")
     assert "give vest Lumina" in sent
+
+
+def test_resting_without_prompts_asks_for_the_numbers(memoria_proto):
+    # Mundi with never-hungry test characters: no tick message, so no prompt, so a camp never saw
+    # itself heal and slept on (a server prompts only after output or input).
+    p = PartyHarness(memoria_proto, ["Vallen", "Lil"])
+    together(p, ["Vallen", "Lil"])
+    p.ev("Lil", "position", position="resting")
+    p.ev("Lil", "prompt", hp=10, mp=100, mv=90)
+    p.take("Lil")
+    p.tick(20)
+    assert "" not in p.take("Lil"), "a prompt 20 s ago is fresh enough"
+    p.tick(15)
+    assert "" in p.take("Lil")
+    p.tick(5)
+    assert "" not in p.take("Lil"), "not again at once"
+    p.ev("Vallen", "position", position="standing")
+    p.take("Vallen")
+    p.tick(40)
+    assert "" not in p.take("Vallen"), "standing: the world talks to us anyway"

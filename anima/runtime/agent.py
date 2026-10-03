@@ -30,6 +30,9 @@ URGENT = ("combat.", "self.", "room", "occupant.arrived", "condition", "position
 _req_ids = itertools.count(1)
 
 
+REFRESH_S = 30.0          # resting or asleep with no prompt this long: ask for the numbers
+REFRESH = Source("system", "runtime/refresh", "resting without a prompt: the numbers")
+
 @dataclass
 class AgentRuntime:
     agent: str
@@ -50,6 +53,7 @@ class AgentRuntime:
     human_goal: str | None = None      # #go: a room the person wants to walk to
     _ask_open: dict[str, str] = field(default_factory=dict)          # request id -> ask name
     _dirty: bool = True
+    _refreshed: float = -1e9
     _last_seq: int | None = None
 
     def __post_init__(self) -> None:
@@ -122,6 +126,7 @@ class AgentRuntime:
     def tick(self) -> None:
         if not self.state.in_game:
             return
+        self._refresh_numbers()
         if self.human_goal is not None:
             self._human_step()
         if self.held():                  # reflexes still answer events; choosing and tasks wait for the person
@@ -134,6 +139,16 @@ class AgentRuntime:
         self.selector.tick(self._last_seq)
         self.tasks.tick()
         self._dirty = False
+
+    def _refresh_numbers(self) -> None:
+        """Resting or asleep, nothing is said, so no prompt comes and the gains of the ticks are not seen
+        (a server prompts only after output or input): an empty line asks for the numbers. The camp's
+        end and every rest decision read them."""
+        now = self.clock()
+        if self.state.position in ("resting", "sleeping") and now - self.state.last_prompt_t > REFRESH_S \
+                and now - self._refreshed > REFRESH_S:
+            self._refreshed = now
+            self.send("", REFRESH, 1)
 
     def tick_if_dirty(self) -> None:
         if self._dirty:
