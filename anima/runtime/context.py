@@ -231,6 +231,8 @@ class Context:
             "has_item": lambda kind: self._inventory_of(kind) is not None,
             "next_skill": self._next_skill,
             "practices_spare": self._practices_spare,
+            "guild_door": self._guild_door,
+            "train_wanted": self._train_wanted,
             "upgrade_item": lambda: self.items.upgrade_item(),
             "gear_gift": lambda: self.items.gear_gift(),
             "sellable_here": lambda keep: self.items.sellable_here(keep),
@@ -297,6 +299,26 @@ class Context:
             if self._proficiency(skill) < int(entry.get("target", 8)):
                 return skill
         return None
+
+    def _train_wanted(self) -> bool:
+        """Practices to spend now (beyond the reserve) on a skill of the plan."""
+        pol = self.program.policies
+        return bool(pol.get("guild_room")) and self._practices_spare(pol.get("reserve_for")) > 0 \
+            and self._next_skill(pol.get("skill_plan") or []) is not None
+
+    def _guild_door(self) -> int | None:
+        """The room outside my guild room (the first step from it toward where I am): the party's stop
+        while I train inside, where a guard lets only my class through."""
+        name = self.program.policies.get("guild_room")
+        here = self.memoria.locator(self.agent).vnum
+        rooms = self.memoria.graph.rooms_named(name) if name else []
+        if not rooms or here is None:
+            return None
+        g = self.memoria.graph
+        path = g.path(rooms[0], here, self.memoria.conditions(self.state.has_light), max_rooms=4000)
+        if not path:
+            return None
+        return g.exits_from(rooms[0], self.memoria.conditions(self.state.has_light))[path[0]]
 
     def _practices_spare(self, reserve_for: dict[str, int] | None) -> int:
         keep = 2 if any(int(lv) == self.state.level + 1 for lv in (reserve_for or {}).values()) else 0

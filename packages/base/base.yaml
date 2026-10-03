@@ -257,9 +257,9 @@ behaviors:
     considerations: ["linear(self.hp_pct, policy.rest_pct, 90)"]
     do: ["stand()", "explore()"]
     every_s: 2
-  train:
+  train:                              # 혼자일 때. 파티는 마을 다녀오기에 길드 문을 넣어 함께 간다 (train_on_trip)
     weight: 0.6
-    when: "not self.fighting and policy.guild_room != '' and not room.dark"
+    when: "not self.fighting and policy.guild_room != '' and not room.dark and party.size <= 1"
     considerations:
       - "step(practices_spare(policy.reserve_for), 1)"
       - "bool(next_skill(policy.skill_plan))"
@@ -267,6 +267,12 @@ behaviors:
     task: train_at_guild
     retry_s: 3000
 
+  train_on_trip:                      # 파티가 내 길드 문 앞에 멈췄다: 들어가 배우고 나온다 (따라가기보다 앞)
+    weight: 1.15
+    when: "not self.fighting and party.trip_stop != null and party.trip_stop == guild_door()"
+    considerations: ["bool(train_wanted())"]
+    task: train_at_guild
+    retry_s: 600
 tasks:
   train_at_guild:
     timeout_s: 900
@@ -274,7 +280,7 @@ tasks:
       - do: ["stand()"]
       - go_to: "policy.guild_room"
       - repeat:
-          do: ["practice(next_skill(policy.skill_plan))", "send('practice')"]
+          do: ["mark('training')", "practice(next_skill(policy.skill_plan))", "send('practice')"]
           while: "practices_spare(policy.reserve_for) > 0 and next_skill(policy.skill_plan) != null"
           max: 20
           every_s: 3

@@ -305,8 +305,10 @@ class PartyBoard:
         return best
 
     def shop_busy(self, agent: str) -> bool:
+        """Someone here is still buying or selling, or a member is training in a guild (out of the room)."""
         now = self.clock()
-        return any(now - self.states[n].marks.get("shopping", -1e9) < 6 for n in self.in_room_with(agent))
+        return any(now - self.states[n].marks.get("shopping", -1e9) < 6 for n in self.in_room_with(agent)) or \
+            any(now - self.states[n].marks.get("training", -1e9) < 6 for n in self.online())
 
     def trip_progress(self, agent: str) -> None:
         """Leader at a stop: stay until nobody has bought or sold for a few seconds, then move on."""

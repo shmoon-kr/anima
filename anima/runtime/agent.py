@@ -135,6 +135,10 @@ class AgentRuntime:
         if pol.get("sell_at") is not None:          # D32: which shops are worth a trip (cached a minute)
             self.state.shop_wants = self.ctx.items.shop_wants(pol.get("inv_keep") or [], pol.get("gold_reserve") or 0,
                                                               pol["sell_at"])
+            if self.ctx._train_wanted():                 # my guild's door is a stop of the town run
+                door = self.ctx._guild_door()
+                if door is not None and door not in self.state.shop_wants:
+                    self.state.shop_wants = [*self.state.shop_wants, door]
         self._asks()
         self.selector.tick(self._last_seq)
         self.tasks.tick()

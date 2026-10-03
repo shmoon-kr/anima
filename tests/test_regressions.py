@@ -456,3 +456,32 @@ def test_a_refusal_for_resting_says_we_are_resting(memoria_proto):
         p.tick()
         sent += p.take("Vallen")
     assert "stand" in sent, sent
+
+
+def test_a_member_trains_at_its_guild_door_on_the_town_run(memoria_proto):
+    # Round 13: followers set out for their guilds alone, go_to_leader called them back at once
+    # (Carmilla: 173 starts, 146 abandoned) and the party split. Now the guild door is a stop of the
+    # town run; there the member goes in, trains, and comes back, the trip waiting.
+    p = PartyHarness(memoria_proto, ["Vallen", "Elysia"])
+    together(p, ["Vallen", "Elysia"])
+    p.ev("Elysia", "char.score", level=5, practices=8)
+    p.ev("Elysia", "char.skills", skills={"cure light": "not learned"})
+    ctx = p.rt["Elysia"].ctx
+    assert ctx._train_wanted()
+    door = ctx._guild_door()
+    assert door is not None
+    for n in ("Vallen", "Elysia"):
+        p.room(n, door)
+    p.board.trip = {"stops": [door], "visited": [], "arrived": None, "started": p.t}
+    assert p.board.trip_stop() == door and ctx._guild_door() == door
+    for n in ("Vallen", "Elysia"):
+        p.take(n)
+    sent = []
+    for _ in range(4):
+        p.tick()
+        sent += p.take("Elysia")
+    guild = p.mem.graph.rooms_named(p.rt["Elysia"].program.policies["guild_room"])[0]
+    inward = p.mem.graph.path(door, guild, p.mem.conditions())[0]
+    assert inward in sent, sent
+    p.rt["Elysia"].state.marks["training"] = p.t
+    assert p.board.shop_busy("Vallen"), "the trip waits while she trains"
