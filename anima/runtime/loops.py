@@ -29,6 +29,13 @@ GUARDED = ("behavior", "reflex", "task")
 _FAILURE_TYPES = {"unknown", "items.cannot_take", "items.cannot_drop", "items.not_found", "items.give_failed"}
 
 
+def _target_gone(events: list[Event]) -> bool:
+    """Only "Kick whom?" (skill.result who): the target died while the command waited in line."""
+    no = [ev for ev in events if ev.type == "skill.result" and (ev.data or {}).get("ok") is False]
+    return bool(no) and all((ev.data or {}).get("reason") == "who" for ev in no) and \
+        not any(ev.type.endswith((".failed", ".refused")) for ev in events)
+
+
 def useless(events: list[Event]) -> tuple | None:
     """What an answer says if it says no (refused, failed, nothing changed); None if it did something.
     A no among other events is still a no: an adapter may add the protocol's event beside a server's
@@ -42,7 +49,7 @@ def useless(events: list[Event]) -> tuple | None:
             no.append((ev.type, str(d.get("reason") or d.get("result") or "")))
         elif ev.type == "items.used" and d.get("empty"):
             no.append((ev.type, "empty"))                    # "It is empty."
-    if no and all(n == ("skill.result", "who") for n in no):
+    if _target_gone(events):
         # "Kick whom?": the fight ended while the command waited in line (six hit the mob, it
         # dies first). Not a loop, and pausing it left the fighter without that skill for the next
         # fight (round 36). A skill sent with no fight is stopped by its behavior's `when`.
@@ -93,6 +100,8 @@ class LoopGuard:
         # too often with nothing coming of it, whatever the answers say
         if any(e.type in _PROGRESS and (e.data or {}).get("ok") is not False for e in events):
             self._sent.pop(key, None)
+        elif _target_gone(events):
+            pass                     # the fight ended while it waited in line: neither progress nor a loop
         else:
             times = [t for t in self._sent.get(key, []) if now - t <= WINDOW_S] + [now]
             self._sent[key] = times

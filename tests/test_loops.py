@@ -129,3 +129,14 @@ def test_a_skill_whose_target_just_died_is_not_a_loop():
     from anima.runtime.loops import useless
     assert useless([Event("skill.result", {"skill": "kick", "ok": False, "reason": "who"})]) is None
     assert useless([Event("skill.result", {"skill": "kick", "ok": False, "reason": "no_mana"})]) is not None
+
+
+
+def test_kicks_after_each_fights_end_are_not_a_flood():
+    # round 46: one kick a fight reached the server after the mob died; the flood rule counted
+    # them and paused kick in a long run of fights
+    g, clock, seen = guard()
+    for _ in range(12):
+        answer(g, clock, "kick", [("skill.result", {"skill": "kick", "ok": False, "reason": "who"})],
+               source="class-warrior/fight_skill")
+    assert g.paused("class-warrior/fight_skill", "kick") == 0 and not seen
