@@ -25,7 +25,8 @@ def vnum(id_: Any) -> Any:
     return id_
 
 
-_CLASSES = {"mage": "magic_user"}      # the party's class words → Mundi's (crates/mundi-sim Class)
+_CLASSES = {"mage": "magic_user"}
+_ALREADY = {"stand": "standing", "sit": "sitting", "rest": "resting", "sleep": "sleeping"}      # the party's class words → Mundi's (crates/mundi-sim Class)
 
 
 def mundi_class(name: str) -> str:
@@ -54,7 +55,12 @@ class MundiWsAdapter:
             data["exits"] = [{**e, "to_id": vnum(e.get("to_id"))} if isinstance(e, dict) and "to_id" in e else e
                              for e in data.get("exits", [])]
         raw = [strip_ansi(line) for line in env.get("text", [])] if self.keep_raw else None
-        return [self.stamper.stamp(env["type"], data, raw=raw or None)]
+        out = [self.stamper.stamp(env["type"], data, raw=raw or None)]
+        # "You are already standing." tells the position (PROTOCOL.md `position`, as the text adapter
+        # reads it); Mundi says it as position.refused.
+        if env["type"] == "position.refused" and data.get("reason") == "already" and data.get("command") in _ALREADY:
+            out.append(self.stamper.stamp("position", {"position": _ALREADY[data["command"]]}))
+        return out
 
     def screen(self, frame: str) -> str:
         """The frame's lines as a terminal shows them (colours kept), for people watching."""

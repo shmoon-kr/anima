@@ -89,3 +89,10 @@ def test_the_profile_carries_the_screens_language_and_the_class(tmp_path):
     sup = Supervisor(cfg, ["Lil", "Bo"])
     assert sup._profile("Lil", {"classes": {"Lil": "mage"}}) == {"lang": "ko", "sex": "female", "class": "magic_user"}
     assert sup._profile("Bo", {})["lang"] == "en", "a character's own setting wins"
+
+
+def test_already_in_a_position_tells_the_position():
+    a = MundiWsAdapter("Vallen")
+    evs = a.feed(env("position.refused", {"command": "stand", "reason": "already"}, ["You are already standing."]))
+    assert [e.type for e in evs] == ["position.refused", "position"] and evs[1].data == {"position": "standing"}
+    assert len(a.feed(env("position.refused", {"command": "stand", "reason": "fighting"}))) == 1

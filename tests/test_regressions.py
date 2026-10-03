@@ -316,10 +316,12 @@ def test_a_fresh_entry_forgets_the_group_so_the_leader_forms_it_again(memoria_pr
     assert p.rt["Vallen"].state.in_group and p.rt["Lil"].state.following == "Vallen"
     p.ev("Lil", "connection.in_game", how="reconnected")
     assert p.rt["Lil"].state.following == "Vallen", "a reconnect keeps them"
+    p.ev("Vallen", "position", position="resting")
     for n in ("Vallen", "Lil"):
         p.ev(n, "connection.closed", reason="remote")
         p.ev(n, "connection.in_game", how="entered")
     assert not p.rt["Vallen"].state.in_group and p.rt["Lil"].state.following is None
+    assert p.rt["Vallen"].state.position == "standing", "one comes in standing, whatever it was"
     for n in ("Vallen", "Lil"):
         p.room(n, NEWBIE_ENTRANCE)
     p.take("Vallen")

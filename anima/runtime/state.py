@@ -194,6 +194,7 @@ class AgentState:
         elif t == "connection.in_game":
             self.in_game = True
             if d.get("how") == "entered":
+                self.position = "standing"           # one comes into the game on one's feet
                 # a fresh entry (after a reboot, a crash, a quit): no group, no one followed. A reconnect
                 # keeps both. Else the leader thinks it leads a group that is gone and never forms one.
                 self.in_group = False
