@@ -113,3 +113,12 @@ def test_the_same_command_too_often_is_held_whatever_the_answer():
         clock.t -= 4                                       # 9 sends within a minute
     assert seen and seen[0]["answer"][0][0] == "repeated"
     assert g.paused("base/buy_here", "buy plate") > 0
+
+
+def test_walking_a_corridor_is_not_a_loop():
+    # Round 7: the frequency rule held the leader's exploring ('east' x9 along a corridor) and kills fell.
+    g, clock, seen = guard()
+    for i in range(12):
+        answer(g, clock, "east", [("room", {"name": f"room {i}"})], source="role-leader/explore")
+        clock.t -= 4
+    assert seen == []

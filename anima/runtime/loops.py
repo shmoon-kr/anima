@@ -20,8 +20,11 @@ REPEATS = 3            # the same useless answer this many times ...
 WINDOW_S = 60.0        # ... within this long is a loop
 PAUSE_S = 30.0         # the first pause; each further loop of the same command doubles it ...
 PAUSE_MAX_S = 600.0    # ... up to this
-FLOOD = 8             # the same command from the same source more than this many times in WINDOW_S,
-                      # whatever the answers ("You can't afford it!" comes as a tell): a loop too
+FLOOD = 8             # the same command from the same source more than this many times in WINDOW_S with
+                      # no progress in its answers ("You can't afford it!" comes as a tell): a loop too
+# answers that are progress: a walk along a corridor sends 'east' again and again, each a new room
+_PROGRESS = {"room", "room.dark", "combat.hit", "combat.death", "exp.gain", "items.got", "items.received",
+             "items.gave", "items.used", "shop.result", "level.up", "char.practiced"}
 GUARDED = ("behavior", "reflex", "task")
 _FAILURE_TYPES = {"unknown", "items.cannot_take", "items.cannot_drop", "items.not_found", "items.give_failed"}
 
@@ -65,14 +68,7 @@ class LoopGuard:
             self._close()
             src = (ev.data or {}).get("source") or {}
             if src.get("kind") in GUARDED and not (ev.data or {}).get("secret"):
-                key = (src.get("id", ""), (ev.data or {}).get("text", ""))
-                now = self.clock()
-                self._open = (key[0], key[1], now)
-                times = [t for t in self._sent.get(key, []) if now - t <= WINDOW_S] + [now]
-                self._sent[key] = times
-                if len(times) > FLOOD:
-                    self._sent[key] = []
-                    self._hold(key, (("repeated", str(len(times))),), len(times))
+                self._open = (src.get("id", ""), (ev.data or {}).get("text", ""), self.clock())
             return
         if self._open is None or ev.type.startswith("runtime.") or ev.type.startswith("animus."):
             return
@@ -86,8 +82,19 @@ class LoopGuard:
             return
         source, text, _ = self._open
         key = (source, text)
-        answer, self._open, self._answer = useless(self._answer), None, []
+        events = self._answer
+        answer, self._open, self._answer = useless(events), None, []
         now = self.clock()
+        # too often with nothing coming of it, whatever the answers say
+        if any(e.type in _PROGRESS and (e.data or {}).get("ok") is not False for e in events):
+            self._sent.pop(key, None)
+        else:
+            times = [t for t in self._sent.get(key, []) if now - t <= WINDOW_S] + [now]
+            self._sent[key] = times
+            if len(times) > FLOOD:
+                self._sent[key] = []
+                self._hold(key, (("repeated", str(len(times))),), len(times))
+                return
         if answer is None:                                    # it did something: start over
             self._streaks.pop(key, None)
             self._level.pop(key, None)
