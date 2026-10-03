@@ -27,6 +27,7 @@ class Memoria:
         self.above_level_zones: set[int] = set()
         self._closed: dict[str, tuple[int, str, float]] = {}
         self.level_exp: dict[str, dict[int, int]] = {}      # class -> level -> total exp to reach it
+        self.blocked: dict[str, set[tuple[int, str]]] = {}   # agent -> exits a guard keeps them from (by class)
 
     def level_span(self, chclass: str | None, level: int | None) -> int | None:
         """Experience between this level and the next (None if unknown). Progress = exp / span."""
@@ -54,9 +55,11 @@ class Memoria:
     def attach(self, bus: Bus) -> None:
         bus.subscribe(self.on_event)
 
-    def conditions(self, has_light: bool = False, zone: int | None = None) -> Conditions:
+    def conditions(self, has_light: bool = False, zone: int | None = None, agent: str | None = None) -> Conditions:
+        """What a traveller can use now; with `agent`, also minus the exits only they are kept from."""
         return Conditions(has_light=has_light, night=self.night, zone=zone,
-                          avoid_zones=frozenset(self.above_level_zones))
+                          avoid_zones=frozenset(self.above_level_zones),
+                          blocked=frozenset(self.blocked.get(agent, ())) if agent else frozenset())
 
     def on_event(self, ev: Event) -> None:
         if not ev.agent:
@@ -78,8 +81,11 @@ class Memoria:
                 elif reason == "closed":
                     self.graph.block_exit(before, pending, CLOSED_RETRY_S)     # time for an `open` to work
                     self._closed[ev.agent] = (before, pending, self.graph.clock())
-                elif reason in ("need_boat", "forbidden", "guarded"):
+                elif reason in ("need_boat", "forbidden"):
                     self.graph.block_exit(before, pending)
+                elif reason == "guarded":
+                    # a guild guard stops other classes: that exit is closed to this agent, not to all
+                    self.blocked.setdefault(ev.agent, set()).add((before, pending))
             elif reason == "locked" and ev.agent in self._closed:
                 # "It seems to be locked." answers the `open` that followed "The gate seems to be closed."
                 vnum, d, at = self._closed.pop(ev.agent)

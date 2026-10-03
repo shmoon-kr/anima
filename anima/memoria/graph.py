@@ -37,6 +37,7 @@ class Conditions:
     night: bool = False
     zone: int | None = None             # stay inside this zone (None: anywhere)
     avoid_zones: frozenset[int] = frozenset()
+    blocked: frozenset[tuple[int, str]] = frozenset()   # this traveller's own blocked exits (a guard who stops their class)
 
 
 class Graph:
@@ -109,7 +110,8 @@ class Graph:
     def exits_from(self, vnum: int, cond: Conditions) -> dict[str, int]:
         room = self.world.rooms[vnum]
         return {d: to for d, to in self.usable_exits(room).items()
-                if not self._active(self._blocked_exits, (vnum, d)) and self.enterable(to, cond)}
+                if not self._active(self._blocked_exits, (vnum, d)) and (vnum, d) not in cond.blocked
+                and self.enterable(to, cond)}
 
     # ------------------------------------------------------------ queries
     def path(self, start: int, goal: int | Callable[[int], bool], cond: Conditions | None = None,

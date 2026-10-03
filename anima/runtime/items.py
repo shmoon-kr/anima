@@ -201,7 +201,7 @@ class Items:
         """Shop rooms within SHOP_REACH steps on foot, by one breadth-first walk."""
         from collections import deque
         g = self.ctx.memoria.graph
-        cond = self.ctx.memoria.conditions(has_light=self.ctx.state.has_light)
+        cond = self.ctx.memoria.conditions(has_light=self.ctx.state.has_light, agent=self.ctx.agent)
         shops = self.shop_rooms()
         dist, q, out = {start: 0}, deque([start]), []
         while q:

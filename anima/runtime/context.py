@@ -36,7 +36,7 @@ class SoloParty:
     def value(self, field: str, agent: str) -> Any:
         return {"leader": agent, "is_leader": True, "size": 1, "here": 1, "all_here": True, "lost_secs": 0,
                 "resting": False, "rally": None, "role": "", "leader_room": None, "leader_vnum": None,
-                "with_leader": True, "following": False, "in_group": False, "online": 1, "min_mv_pct": 100, "unseen_here": 0, "all_following": True,
+                "with_leader": True, "leader_reachable": True, "wait_vnum": None, "following": False, "in_group": False, "online": 1, "min_mv_pct": 100, "unseen_here": 0, "all_following": True,
                 "thirsty_in_room": [], "hungry_in_room": [], "camping": False, "sentry": None,
                 "is_sentry": False, "trip_stop": None, "trip_wanted": False, "shop_busy": False}.get(field)
 
@@ -308,7 +308,7 @@ class Context:
             return None
         if self.state.room.get("name") == room:
             return 0
-        p = self.memoria.graph.path_to_name(vnum, room, self.memoria.conditions(self.state.has_light))
+        p = self.memoria.graph.path_to_name(vnum, room, self.memoria.conditions(self.state.has_light, agent=self.agent))
         return len(p) if p is not None else None
 
     def _in_zone_of(self, room: str) -> bool:
@@ -429,7 +429,7 @@ class Context:
         if vnum is None:
             self.a_explore()
             return "lost"
-        cond = self.memoria.conditions(self.state.has_light)
+        cond = self.memoria.conditions(self.state.has_light, agent=self.agent)
         path = self.memoria.graph.path(vnum, int(room), cond) if by_vnum else \
             self.memoria.graph.path_to_name(vnum, room, cond)
         if not path:
@@ -450,7 +450,7 @@ class Context:
         if self.moving():
             return
         loc = self.memoria.locator(self.agent)
-        cond = self.memoria.conditions(self.state.has_light)
+        cond = self.memoria.conditions(self.state.has_light, agent=self.agent)
         rally = self.party.value("rally", self.agent)
         home_zone = None
         if rally:

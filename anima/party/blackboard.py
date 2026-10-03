@@ -360,7 +360,7 @@ class PartyBoard:
         if agent not in self.roster:
             return {"leader": agent, "is_leader": True, "size": 1, "here": 1, "all_here": True,
                     "lost_secs": 0, "resting": False, "rally": None, "role": "", "leader_room": None,
-                    "with_leader": True, "leader_vnum": None, "min_mv_pct": 100, "unseen_here": 0, "all_following": True, "following": False, "in_group": False, "online": 1,
+                    "with_leader": True, "leader_reachable": True, "wait_vnum": None, "leader_vnum": None, "min_mv_pct": 100, "unseen_here": 0, "all_following": True, "following": False, "in_group": False, "online": 1,
                     "thirsty_in_room": [], "hungry_in_room": [], "camping": False, "sentry": None,
                     "is_sentry": False, "trip_stop": None, "trip_wanted": False, "shop_busy": False}.get(f)
         here = self.in_room_with(agent)
@@ -409,6 +409,10 @@ class PartyBoard:
             return ls.room.get("name") if ls is not None and ls.in_game and not ls.room_dark else None
         if f == "leader_vnum":
             return self.vnum(self.leader)
+        if f == "leader_reachable":
+            return self._toward_leader(agent)[0]
+        if f == "wait_vnum":
+            return self._toward_leader(agent)[1]
         if f == "with_leader":           # same room by estimate AND the leader is actually seen there
             return agent == self.leader or self.leader in here
         if f == "all_following":
@@ -423,6 +427,26 @@ class PartyBoard:
         if f == "hungry_in_room":
             return [n for n in here if self.states[n].hungry]
         raise KeyError(f)
+
+    def _toward_leader(self, agent: str) -> tuple[bool, int | None]:
+        """Can this member walk to the leader? If an exit only they are kept from (a guild guard) is
+        in the way: no, and the room before it, where they wait (the guild's entrance)."""
+        me, there = self.memoria.locator(agent).vnum, self.vnum(self.leader)
+        if me is None or there is None or me == there:
+            return True, None
+        st = self.states.get(agent)
+        lit = bool(st and st.has_light)
+        mine = self.memoria.conditions(has_light=lit, agent=agent)
+        if self.memoria.graph.path(me, there, mine, max_rooms=4000) is not None:
+            return True, None
+        free = self.memoria.conditions(has_light=lit)
+        steps = self.memoria.graph.path(me, there, free, max_rooms=4000)
+        v = me
+        for d in steps or []:
+            if (v, d) in mine.blocked:
+                return False, v
+            v = self.memoria.graph.exits_from(v, free)[d]
+        return False, None
 
     def members_in_room(self, agent: str) -> list[dict[str, Any]]:
         if agent not in self.roster:

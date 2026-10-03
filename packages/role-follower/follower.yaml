@@ -9,9 +9,15 @@ reflexes:
 behaviors:
   go_to_leader:                        # 쉬더라도 리더 곁에서 쉰다 (리더는 쉬는 파티원을 기다린다)
     weight: 1.1
-    when: "not party.is_leader and not party.with_leader and party.leader_vnum != null and party.leader_vnum != room.vnum and not self.fighting"
+    when: "not party.is_leader and not party.with_leader and party.leader_vnum != null and party.leader_vnum != room.vnum and party.leader_reachable and not self.fighting"
     considerations: ["step(self.mv, 10)"]
     do: ["stand()", "go_to(party.leader_vnum)"]
+    every_s: 1
+  wait_near_leader:                   # 리더가 나만 못 지나가는 출구 너머(다른 직업의 길드)에 있으면 그 앞에서 기다린다.
+    weight: 0.95                      # 먹기·마시기(1.0)보다 낮다: 기다리는 동안 먹고 마신다
+    when: "not party.is_leader and not party.with_leader and not party.leader_reachable and party.wait_vnum != null and party.wait_vnum != room.vnum and not self.fighting"
+    considerations: ["1"]
+    do: ["stand()", "go_to(party.wait_vnum)"]
     every_s: 1
   join_leader:                        # 따라가기가 먼저: 안 그러면 리더가 떠날 때마다 한 방씩 뒤처진다
     weight: 1.2

@@ -92,6 +92,8 @@ STATE: list[State] = [
     State("party.leader_room", "text", "리더가 있는 방 이름 (모르면 null)"),
     State("party.leader_vnum", "number", "리더가 있는 방 번호 (Memoria 추정, 모르면 null). go_to 에 그대로 쓸 수 있다"),
     State("party.with_leader", "bool", "리더와 같은 방"),
+    State("party.leader_reachable", "bool", "리더에게 걸어갈 수 있음 (나만 막는 출구, 예: 다른 직업의 길드 경비가 길에 있으면 false)"),
+    State("party.wait_vnum", "number", "리더에게 못 갈 때 기다릴 방: 나를 막는 출구 바로 앞 (모르면 null)"),
     State("party.following", "bool", "리더를 따라가는 중 (서버 follow)"),
     State("party.in_group", "bool", "서버 그룹에 들어 있음"),
     State("party.online", "number", "게임 안에 있는 명단 인원"),

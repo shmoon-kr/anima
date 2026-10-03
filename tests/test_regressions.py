@@ -269,3 +269,40 @@ def test_a_room_whose_description_is_indented_two_spaces_is_still_a_room():
             "\x1b[0;36m[ Exits: e w ]\x1b[0m\r\n10H 1M 1V > ")
     rooms = [e for e in a.feed(text) if e.type == "room"]
     assert rooms and rooms[0].data["name"] == "The Edge Of The Ravine"
+
+
+def test_a_guild_guard_keeps_a_follower_out_so_it_waits_at_the_door_and_eats(memoria_proto):
+    # Live (2026-10-03): the leader and Senia (warriors) drank in the swordsmen's bar (3022); the
+    # other four stood at its door (3021), sent there by go_to_leader again and again, and never ate.
+    entrance, bar = 3021, 3022
+    p = PartyHarness(memoria_proto, ["Vallen", "Lil", "Senia"])
+    p.enter("Vallen", bar)
+    p.enter("Senia", bar)
+    p.enter("Lil", entrance)
+    p.tick()
+    assert "east" in p.take("Lil"), "it tries the way to the leader first"
+    p.ev("Lil", "move.failed", reason="guarded")
+    assert (entrance, "east") in p.mem.blocked["Lil"] and "Senia" not in p.mem.blocked, "the guard stops Lil, not the warriors"
+    assert p.mem.graph.path(entrance, bar, p.mem.conditions(agent="Senia")) == ["east"]
+    assert p.board.value("leader_reachable", "Lil") is False
+    assert p.board.value("wait_vnum", "Lil") == entrance
+    p.ev("Lil", "condition", hungry=True)
+    p.ev("Lil", "items.inventory", items=[{"text": "a waybread", "count": 1}])
+    p.take("Lil")
+    for _ in range(6):
+        p.tick()
+    out = p.take("Lil")
+    assert "east" not in out, out
+    assert any(t.startswith("eat ") for t in out), out
+
+
+def test_a_follower_kept_out_walks_to_the_door_to_wait(memoria_proto):
+    entrance, bar, market = 3021, 3022, 3014
+    p = PartyHarness(memoria_proto, ["Vallen", "Lil"])
+    p.enter("Vallen", bar)
+    p.mem.blocked["Lil"] = {(entrance, "east")}
+    p.enter("Lil", market)
+    p.tick()
+    assert p.board.value("wait_vnum", "Lil") == entrance
+    first = p.mem.graph.path(market, entrance, p.mem.conditions(agent="Lil"))[0]
+    assert first in p.take("Lil"), "on its way to the door"
