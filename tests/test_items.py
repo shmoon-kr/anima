@@ -199,3 +199,31 @@ def test_a_bug_in_a_tick_is_recorded_and_the_agent_keeps_going(memoria_proto):
     assert errs and "ValueError: boom" in errs[0].data["error"]
     h.advance(5)
     assert len(calls) == 2, "the next tick still chooses"
+
+
+def test_the_list_is_asked_again_when_the_stock_changes(memoria_proto):
+    # round 17: members sold while one bought by number; '#23' pointed at another product, and the
+    # keeper's "Haven't got that on storage - try list!" came ten times
+    h = agent(memoria_proto, "Vallen", vnum=shop_room(memoria_proto, ARMORY), gold=400)
+    items = h.rt.ctx.items
+    stock = [memoria_proto.world.objs[v].short for v in items.shop_here().products]
+    h.ev("shop.list", items=[{"text": t, "price": 1} for t in stock])
+    assert items.buy_here(100).startswith("#")
+    h.ev("shop.result", action="sell", who="Lumina", text="a vest", ok=True)
+    assert items.buy_here(100) is None and items.list_needed(100), "someone sold: the numbers moved"
+    h.ev("shop.list", items=[{"text": t, "price": 1} for t in stock])
+    h.advance(10)
+    assert any(t.startswith("buy #") for t in h.take())
+    h.ev("comm.tell", **{"from": "the armorer", "to": "Vallen", "text": "Haven't got that on storage - try list!",
+                         "direction": "in"})
+    assert items.list_needed(100), "the keeper said try list"
+
+
+def test_a_full_bag_stops_buying_for_a_minute(memoria_proto):
+    h = agent(memoria_proto, "Vallen", vnum=shop_room(memoria_proto, ARMORY), gold=400)
+    stock = [memoria_proto.world.objs[v].short for v in h.rt.ctx.items.shop_here().products]
+    h.ev("shop.list", items=[{"text": t, "price": 1} for t in stock])
+    h.ev("shop.result", action="buy", text="leggings", ok=False, reason="too_many")
+    for _ in range(5):
+        h.advance(5)
+    assert not any(t.startswith(("buy ", "list")) for t in h.take()), "bag full: sell or junk first"

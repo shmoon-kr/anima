@@ -8,6 +8,7 @@ from anima.protocol.envelope import SELF, Event
 
 FIGHT_WINDOW_S = 6.0
 NEVER = -1e9
+BUY_ANSWER_S = 3.0      # a tell this soon after my `buy` is the keeper answering it
 
 
 def _same(a: str, b: str) -> bool:
@@ -83,6 +84,7 @@ class AgentState:
 
     # ------------------------------------------------------------ events
     _now: float = 0.0
+    last_buy_t: float = -1e9
 
     def on_event(self, ev: Event, now: float) -> None:
         self._now = now
@@ -94,6 +96,11 @@ class AgentState:
             self.position = d["reason"]
         if t == "shop.list":
             self.shop_list, self.shop_list_room = list(d.get("items", [])), self.room.get("name")
+        elif t == "shop.result" and d.get("ok", True) or t == "comm.tell" and now - self.last_buy_t < BUY_ANSWER_S:
+            # the stock changed (a sale adds a line, a purchase can take one) or the keeper said "try
+            # list!": the numbers of the old list point at other things now (round 17: '#23' bought a
+            # chain mail shirt, then "Haven't got that on storage" ten times)
+            self.shop_list, self.shop_list_room = [], None
         if t == "prompt":
             self.last_prompt_t = now
             self.hp, self.mp, self.mv = d.get("hp"), d.get("mp"), d.get("mv")
@@ -126,6 +133,8 @@ class AgentState:
                     self.capped.add(self.last_practice)     # not teachable here / not known at this level
         elif t == "command.sent":
             text = d.get("text", "")
+            if text.startswith("buy "):
+                self.last_buy_t = now
             if text.startswith("practice "):
                 self.last_practice = text[len("practice "):].strip()
         elif t == "level.up":

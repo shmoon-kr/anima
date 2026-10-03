@@ -201,13 +201,13 @@ behaviors:
     every_s: 3
   list_here:                          # 살 물건의 이름이 겹치면 (breast plate 와 bronze breast plate) 목록 번호로 사야 한다
     weight: 0.87
-    when: "room.shop and not self.fighting"
+    when: "room.shop and not self.fighting and secs_since('bag_full') > 60"
     considerations: ["bool(list_needed(policy.gold_reserve))"]
     do: ["send('list')"]
     every_s: 10
   buy_here:
     weight: 0.86
-    when: "room.shop and not self.fighting"
+    when: "room.shop and not self.fighting and secs_since('bag_full') > 60"   # 가방이 차면 먼저 팔고 버린다
     considerations: ["bool(buy_here(policy.gold_reserve))"]
     do: ["stand()", "mark('shopping')", "send('buy ' + buy_here(policy.gold_reserve))", "send('inventory')", "send('score')"]
     every_s: 4
