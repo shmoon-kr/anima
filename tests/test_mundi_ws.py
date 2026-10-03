@@ -79,3 +79,13 @@ async def test_login_is_one_message_and_the_password_is_never_recorded(tmp_path)
     assert "hunter2" not in (tmp_path / "r.jsonl").read_text()
     assert any("Temple" in s for s in screens)
     assert sess.error is None
+
+
+def test_the_profile_carries_the_screens_language_and_the_class(tmp_path):
+    from pathlib import Path
+    from anima.session.supervisor import Config, Supervisor
+    cfg = Config(host="h", port=1, password="p", world_dir=Path("."), hazards=Path("."), protocol="mundi",
+                 lang="ko", characters={"Lil": {"sex": "female"}, "Bo": {"lang": "en"}})
+    sup = Supervisor(cfg, ["Lil", "Bo"])
+    assert sup._profile("Lil", {"classes": {"Lil": "mage"}}) == {"lang": "ko", "sex": "female", "class": "magic_user"}
+    assert sup._profile("Bo", {})["lang"] == "en", "a character's own setting wins"

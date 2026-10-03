@@ -43,6 +43,7 @@ class Config:
     animus: dict[str, Any] = field(default_factory=dict)     # config/anima.toml [animus]; empty = phase-1 fakes
     protocol: str = "telnet"                                  # [server] protocol: telnet (tbaMUD) or mundi
     characters: dict[str, dict[str, Any]] = field(default_factory=dict)   # [characters.NAME]: sex, lang (mundi)
+    lang: str = "en"                                          # [server] lang: the screens' language (mundi: en, ko)
 
     @classmethod
     def load(cls, root: Path = Path(".")) -> "Config":
@@ -68,7 +69,8 @@ class Config:
                    hazards=root / paths.get("hazards", "third_party/tbamud/hazards.yaml"),
                    agents_dir=root / "agents", packages_dir=root / "packages",
                    recordings=sub(root / "recordings"), run_dir=sub(root / "run"), animus=local.get("animus", {}),
-                   protocol=secret["server"].get("protocol", "telnet"), characters=secret.get("characters", {}))
+                   protocol=secret["server"].get("protocol", "telnet"), characters=secret.get("characters", {}),
+                   lang=secret["server"].get("lang", "en"))
 
 
 def _tintin_pass(path: Path) -> str:
@@ -102,7 +104,7 @@ class Supervisor:
     def _profile(self, name: str, policies: dict[str, Any]) -> dict[str, Any]:
         """What a Mundi login says about the character: its class from the party's `classes`, and
         sex or language from [characters.NAME] in the secret file."""
-        out = dict(self.cfg.characters.get(name, {}))
+        out = {"lang": self.cfg.lang, **self.cfg.characters.get(name, {})}
         cls = (policies.get("classes") or {}).get(name)
         if cls and "class" not in out:
             from anima.adapters.mundi_ws.adapter import mundi_class
