@@ -84,7 +84,8 @@ def _also(type_: str, d: dict) -> list[tuple[str, dict]]:
         # "It seems to be locked." after `open`: the text adapter's move.failed locked, which tells the
         # map to leave that door alone for a while (round 23: west of 6505 tried four times)
         return [("move.failed", {"reason": "locked"})]
-    if type_ == "items.failed" and d.get("action") == "drop" and reason == "cursed":
+    if type_ == "items.failed" and d.get("action") in ("drop", "junk", "donate") and reason == "cursed":
+        # "You can't let go of it, it must be CURSED!": the same for drop, junk and donate (round 28: junk ring x6)
         return [("items.cannot_drop", {"text": d.get("text", ""), "reason": "cursed"})]
     return []
 

@@ -124,6 +124,9 @@ def test_what_mundi_says_its_own_way_also_comes_as_the_protocols_event():
     types = lambda frame: [(e.type, e.data) for e in a.feed(frame)][1:]
     assert types(env("group.failed", {"reason": "already_in_group"})) == [("group.change", {"event": "joined", "who": "self"})]
     assert types(env("door.failed", {"reason": "seems_locked", "door": "door"})) == [("move.failed", {"reason": "locked"})]
+    for action in ("drop", "junk"):
+        assert types(env("items.failed", {"action": action, "reason": "cursed", "text": "a ring"})) == \
+            [("items.cannot_drop", {"text": "a ring", "reason": "cursed"})]
     assert types(env("group.failed", {"reason": "already_following", "who": "Vallen"})) == [("group.change", {"event": "following", "who": "Vallen"})]
     assert types(env("items.failed", {"action": "give", "reason": "hands_full", "text": "a waybread"})) == [("items.give_failed", {"reason": "hands_full"})]
     assert types(env("items.failed", {"action": "drop", "reason": "cursed", "text": "a ring"})) == [("items.cannot_drop", {"text": "a ring", "reason": "cursed"})]
