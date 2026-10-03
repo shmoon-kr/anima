@@ -107,3 +107,16 @@ def test_equipment_slots_are_the_labels_anima_reads():
         {"slot": "finger_left", "text": "a ring"}]}))[0]
     assert [s["slot"] for s in ev.data["slots"]] == ["worn on body", "worn on finger"]
     assert all(s["slot"] in SLOT_OF_LABEL for s in ev.data["slots"])
+
+
+def test_what_mundi_says_its_own_way_also_comes_as_the_protocols_event():
+    a = MundiWsAdapter("Vallen")
+    types = lambda frame: [(e.type, e.data) for e in a.feed(frame)][1:]
+    assert types(env("group.failed", {"reason": "already_in_group"})) == [("group.change", {"event": "joined", "who": "self"})]
+    assert types(env("group.failed", {"reason": "already_following", "who": "Vallen"})) == [("group.change", {"event": "following", "who": None})]
+    assert types(env("items.failed", {"action": "give", "reason": "hands_full", "text": "a waybread"})) == [("items.give_failed", {"reason": "hands_full"})]
+    assert types(env("items.failed", {"action": "drop", "reason": "cursed", "text": "a ring"})) == [("items.cannot_drop", {"text": "a ring", "reason": "cursed"})]
+    assert types(env("group.failed", {"reason": "not_in_group"})) == []
+    room = a.feed(env("room", {**ROOM, "occupants": [{"id": "pc:ana", "text": "Ana is standing here.", "hints": [], "flags": []},
+                                                     {"id": "tba:30:mob:3060/1", "text": "A cityguard stands here.", "hints": [], "flags": []}]}))[0]
+    assert [o["hints"] for o in room.data["occupants"]] == [["player"], []]

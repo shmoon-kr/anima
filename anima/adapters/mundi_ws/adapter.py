@@ -13,7 +13,7 @@ import re
 from typing import Any
 
 from anima.adapters.tbamud_text.ansi import strip_ansi
-from anima.protocol.envelope import Event, Stamper
+from anima.protocol.envelope import SELF, Event, Stamper
 
 _ROOM_ID = re.compile(r"^[a-z]+:\d+:room:(\d+)$")
 
@@ -38,6 +38,23 @@ _SLOT_LABEL = {"light": "used as light", "finger_right": "worn on finger", "fing
 
 def mundi_class(name: str) -> str:
     return _CLASSES.get(name, name)
+
+
+def _also(type_: str, d: dict) -> list[tuple[str, dict]]:
+    """The events PROTOCOL.md (and the text adapter) has for what Mundi says its own way. Mundi's
+    event is kept; these come after it."""
+    reason = d.get("reason")
+    if type_ == "position.refused" and reason == "already" and d.get("command") in _ALREADY:
+        return [("position", {"position": _ALREADY[d["command"]]})]          # "You are already standing."
+    if type_ == "group.failed" and reason == "already_in_group":
+        return [("group.change", {"event": "joined", "who": SELF})]             # "But you are already part of a group."
+    if type_ == "group.failed" and reason == "already_following":
+        return [("group.change", {"event": "following", "who": None})]        # "You are already following $M."
+    if type_ == "items.failed" and d.get("action") == "give" and reason in ("hands_full", "cant_carry"):
+        return [("items.give_failed", {"reason": "hands_full" if reason == "hands_full" else "too_heavy"})]
+    if type_ == "items.failed" and d.get("action") == "drop" and reason == "cursed":
+        return [("items.cannot_drop", {"text": d.get("text", ""), "reason": "cursed"})]
+    return []
 
 
 class MundiWsAdapter:
@@ -65,11 +82,13 @@ class MundiWsAdapter:
             data["slots"] = [{**sl, "slot": _SLOT_LABEL.get(sl.get("slot"), sl.get("slot"))} if isinstance(sl, dict) else sl
                              for sl in data.get("slots", [])]
         raw = [strip_ansi(line) for line in env.get("text", [])] if self.keep_raw else None
+        if env["type"] == "room":
+            # a player is a player (the text adapter's hint); Mundi names them pc:<name>
+            data["occupants"] = [{**o, "hints": list(o.get("hints", [])) + ["player"]}
+                                 if isinstance(o, dict) and str(o.get("id", "")).startswith("pc:") else o
+                                 for o in data.get("occupants", [])]
         out = [self.stamper.stamp(env["type"], data, raw=raw or None)]
-        # "You are already standing." tells the position (PROTOCOL.md `position`, as the text adapter
-        # reads it); Mundi says it as position.refused.
-        if env["type"] == "position.refused" and data.get("reason") == "already" and data.get("command") in _ALREADY:
-            out.append(self.stamper.stamp("position", {"position": _ALREADY[data["command"]]}))
+        out += [self.stamper.stamp(t, d) for t, d in _also(env["type"], data)]
         return out
 
     def screen(self, frame: str) -> str:
