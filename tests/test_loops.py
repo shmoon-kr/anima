@@ -91,3 +91,25 @@ def test_through_the_runtime_a_held_command_is_not_sent(memoria_proto):
     h.advance(31)
     h.advance(6)
     assert "drink canteen" in h.take(), "free again when the pause is over"
+
+
+def test_a_no_beside_an_added_event_is_still_a_no():
+    # Round 6: 'follow Vallen' x329. The adapter adds group.change beside Mundi's "already following";
+    # it counted as progress and the streak never reached three.
+    g, clock, seen = guard()
+    for _ in range(3):
+        answer(g, clock, "follow Vallen", [("group.failed", {"reason": "already_following"}),
+                                           ("group.change", {"event": "following", "who": "Vallen"})],
+               source="role-follower/join_leader")
+    assert seen and seen[0]["command"] == "follow Vallen"
+
+
+def test_the_same_command_too_often_is_held_whatever_the_answer():
+    # "You can't afford it!" comes as a tell, not a refusal: still a hundred buys in a few minutes.
+    g, clock, seen = guard()
+    for _ in range(9):
+        answer(g, clock, "buy plate", [("comm.tell", {"from": "the armorer", "text": "You can't afford it!"})],
+               source="base/buy_here")
+        clock.t -= 4                                       # 9 sends within a minute
+    assert seen and seen[0]["answer"][0][0] == "repeated"
+    assert g.paused("base/buy_here", "buy plate") > 0

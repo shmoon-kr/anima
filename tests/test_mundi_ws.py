@@ -113,7 +113,7 @@ def test_what_mundi_says_its_own_way_also_comes_as_the_protocols_event():
     a = MundiWsAdapter("Vallen")
     types = lambda frame: [(e.type, e.data) for e in a.feed(frame)][1:]
     assert types(env("group.failed", {"reason": "already_in_group"})) == [("group.change", {"event": "joined", "who": "self"})]
-    assert types(env("group.failed", {"reason": "already_following", "who": "Vallen"})) == [("group.change", {"event": "following", "who": None})]
+    assert types(env("group.failed", {"reason": "already_following", "who": "Vallen"})) == [("group.change", {"event": "following", "who": "Vallen"})]
     assert types(env("items.failed", {"action": "give", "reason": "hands_full", "text": "a waybread"})) == [("items.give_failed", {"reason": "hands_full"})]
     assert types(env("items.failed", {"action": "drop", "reason": "cursed", "text": "a ring"})) == [("items.cannot_drop", {"text": "a ring", "reason": "cursed"})]
     assert types(env("group.failed", {"reason": "not_in_group"})) == []
@@ -144,3 +144,8 @@ def test_a_shop_failure_is_said_as_the_protocol_says_it():
     ev = a.feed(env("shop.result", {"action": "too_many", "who": "self", "text": "pants"}))[0]
     assert ev.data["action"] == "buy" and ev.data["ok"] is False and ev.data["reason"] == "too_many"
     assert a.feed(env("shop.result", {"action": "buy", "who": "self", "text": "pants"}))[0].data["ok"] is True
+
+
+def test_already_following_names_the_leader():
+    evs = MundiWsAdapter("Lil").feed(env("group.failed", {"reason": "already_following", "who": "Vallen"}))
+    assert evs[1].type == "group.change" and evs[1].data == {"event": "following", "who": "Vallen"}

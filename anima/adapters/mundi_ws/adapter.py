@@ -49,7 +49,7 @@ def _also(type_: str, d: dict) -> list[tuple[str, dict]]:
     if type_ == "group.failed" and reason == "already_in_group":
         return [("group.change", {"event": "joined", "who": SELF})]             # "But you are already part of a group."
     if type_ == "group.failed" and reason == "already_following":
-        return [("group.change", {"event": "following", "who": None})]        # "You are already following $M."
+        return [("group.change", {"event": "following", "who": d.get("who")})]  # "You are already following $M." (Mundi names $M)
     if type_ == "items.failed" and d.get("action") == "give" and reason in ("hands_full", "cant_carry"):
         return [("items.give_failed", {"reason": "hands_full" if reason == "hands_full" else "too_heavy"})]
     if type_ == "move.blocked" and d.get("who") == SELF:

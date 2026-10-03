@@ -20,12 +20,16 @@ REPEATS = 3            # the same useless answer this many times ...
 WINDOW_S = 60.0        # ... within this long is a loop
 PAUSE_S = 30.0         # the first pause; each further loop of the same command doubles it ...
 PAUSE_MAX_S = 600.0    # ... up to this
+FLOOD = 8             # the same command from the same source more than this many times in WINDOW_S,
+                      # whatever the answers ("You can't afford it!" comes as a tell): a loop too
 GUARDED = ("behavior", "reflex", "task")
 _FAILURE_TYPES = {"unknown", "items.cannot_take", "items.cannot_drop", "items.not_found", "items.give_failed"}
 
 
 def useless(events: list[Event]) -> tuple | None:
-    """What an answer says if it says no (refused, failed, nothing changed); None if it did something."""
+    """What an answer says if it says no (refused, failed, nothing changed); None if it did something.
+    A no among other events is still a no: an adapter may add the protocol's event beside a server's
+    refusal ("already following" also says whom we follow), which is not progress."""
     if not events:
         return (("nothing", ""),)
     no = []
@@ -35,9 +39,7 @@ def useless(events: list[Event]) -> tuple | None:
             no.append((ev.type, str(d.get("reason") or d.get("result") or "")))
         elif ev.type == "items.used" and d.get("empty"):
             no.append((ev.type, "empty"))                    # "It is empty."
-        else:
-            return None
-    return tuple(sorted(no))
+    return tuple(sorted(no)) if no else None
 
 
 @dataclass
@@ -56,13 +58,21 @@ class LoopGuard:
     _streaks: dict[tuple[str, str], _Streak] = field(default_factory=dict)
     _paused: dict[tuple[str, str], float] = field(default_factory=dict)
     _level: dict[tuple[str, str], int] = field(default_factory=dict)   # how many times this one looped
+    _sent: dict[tuple[str, str], list[float]] = field(default_factory=dict)  # when each was sent lately
 
     def observe(self, ev: Event) -> None:
         if ev.type == "command.sent":
             self._close()
             src = (ev.data or {}).get("source") or {}
             if src.get("kind") in GUARDED and not (ev.data or {}).get("secret"):
-                self._open = (src.get("id", ""), (ev.data or {}).get("text", ""), self.clock())
+                key = (src.get("id", ""), (ev.data or {}).get("text", ""))
+                now = self.clock()
+                self._open = (key[0], key[1], now)
+                times = [t for t in self._sent.get(key, []) if now - t <= WINDOW_S] + [now]
+                self._sent[key] = times
+                if len(times) > FLOOD:
+                    self._sent[key] = []
+                    self._hold(key, (("repeated", str(len(times))),), len(times))
             return
         if self._open is None or ev.type.startswith("runtime.") or ev.type.startswith("animus."):
             return
@@ -89,13 +99,17 @@ class LoopGuard:
         s.count += 1
         if s.count < REPEATS:
             return
+        del self._streaks[key]
+        self._hold(key, answer, s.count)
+
+    def _hold(self, key: tuple[str, str], answer: tuple, count: int) -> None:
+        """Hold this source's command back, longer each time it loops again; say so."""
         level = self._level.get(key, 0)
         pause = min(PAUSE_MAX_S, PAUSE_S * 2 ** level)
         self._level[key] = level + 1
-        self._paused[key] = now + pause
-        del self._streaks[key]
-        self.publish("runtime.loop", {"source": source, "command": text, "answer": [list(a) for a in answer],
-                                      "count": s.count, "pause_s": pause})
+        self._paused[key] = self.clock() + pause
+        self.publish("runtime.loop", {"source": key[0], "command": key[1], "answer": [list(a) for a in answer],
+                                      "count": count, "pause_s": pause})
 
     def paused(self, source: str, text: str) -> float:
         """Seconds this source must still not send this command (0: free)."""
