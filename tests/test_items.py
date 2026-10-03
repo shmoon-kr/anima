@@ -140,3 +140,23 @@ def test_a_bought_light_is_held_and_not_bought_again(memoria_proto):
     buys = [t for t in sent if t.startswith("buy ")]
     assert any(t.startswith("hold ") for t in sent), sent
     assert len(buys) <= 2, f"a light or two, not a pile: {buys}"
+
+
+def test_a_full_bag_junks_extra_lights_but_keeps_one_to_spare(memoria_proto):
+    # Mundi: ten torches from a buying loop filled a level-1 bag (it holds a few); buying, giving and
+    # swapping gear then all failed with "too many", and nothing was junked below inv_hard (16).
+    h = agent(memoria_proto, "Senia", inventory=["a torch"] * 10 + ["a bread"])
+    assert h.rt.ctx._surplus_item(["food", "drinkcon", "light", "key"]) == "torch"
+    h.advance(5)
+    assert not any(t.startswith("junk ") for t in h.take()), "not full yet: nothing to junk"
+    h.ev("items.failed", action="get", reason="too_many", text="a dagger")
+    out = []
+    for _ in range(4):                       # it holds one as its light first (wear before junk), then junks
+        h.advance(5)
+        got = h.take()
+        out += got
+        if "hold torch" in got:
+            h.ev("items.equipment", slots=[{"slot": "used as light", "text": "a torch"}])
+    assert "junk torch" in out, out
+    h.ev("items.inventory", items=[{"text": "a torch", "count": 2}, {"text": "a bread", "count": 1}])
+    assert h.rt.ctx._surplus_item(["food", "drinkcon", "light", "key"]) is None, "two kept"

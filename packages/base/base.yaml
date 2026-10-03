@@ -21,6 +21,7 @@ policies:
   inertia: 0.1
   inv_hard: 16            # 이보다 많이 들면 남는 물건을 버린다 (보통은 그 전에 판다, D32)
   inv_keep: [food, drinkcon, light, key]
+  inv_keep_each: 2        # 그 종류를 이만큼까지만 지닌다 (넘는 것은 버릴 것: 횃불 열 개가 가방을 막았다)
   sell_at: 6              # 팔 물건이 이만큼 쌓이면 장보기를 원한다 (D32)
   gold_reserve: 100       # 사고 나서도 남길 금화
   food_min: 2             # 음식이 이보다 적으면 빵집에서 산다
@@ -49,6 +50,14 @@ animus:
     food_min:    {type: number, min: 0, max: 6, step: 2}
 
 reflexes:
+  bag_full:                           # 너무 많이·무겁게 들어서 줍기·사기·받기·벗기가 실패: 버릴 때가 됐다
+    on: items.failed
+    if: "event.reason in ['too_many', 'too_heavy']"   # (hands_full on a give is the receiver's bag)
+    do: ["mark('bag_full')"]
+  bag_full_tba:                       # tbaMUD 문구로는 items.cannot_take
+    on: items.cannot_take
+    if: "event.reason in ['too_many', 'too_heavy']"
+    do: ["mark('bag_full')"]
   setup_on_enter:
     on: connection.in_game
     do:
@@ -213,7 +222,8 @@ behaviors:
     every_s: 4
   junk_surplus:
     weight: 0.5
-    when: "not self.fighting and len(self.inventory) > policy.inv_hard"
+    # 가방이 차서 무엇이 실패했으면(낮은 레벨은 inv_hard 전에 찬다) 그때도 버린다
+    when: "not self.fighting and (len(self.inventory) > policy.inv_hard or secs_since('bag_full') < 120)"
     considerations: ["bool(surplus_item(policy.inv_keep))"]
     do: ["stand()", "send('junk ' + surplus_item(policy.inv_keep))", "send('inventory')"]
     every_s: 4

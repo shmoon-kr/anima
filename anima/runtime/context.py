@@ -264,14 +264,22 @@ class Context:
         return PROF_RANK.get(self.state.skills.get(skill.replace("_", " "), "not learned"), 0)
 
     def _surplus_item(self, keep: list[str]) -> str | None:
+        """What to junk: first what is of no kept type, then a kept type beyond policy.inv_keep_each of it
+        (two lights are a spare; ten torches from a buying loop are a full bag)."""
         k = self.memoria.knowledge
+        each = int(self.program.policies.get("inv_keep_each", 2) or 2)
+        kept: dict[str, int] = {}
+        extra = None
         for text in self.state.inventory:
             if text.lower() in self.state.undroppable:
                 continue
             o = k.item(text)
             if o is None or o.type not in (keep or []):
                 return k.item_keyword(text)
-        return None
+            kept[o.type] = kept.get(o.type, 0) + 1
+            if kept[o.type] > each and extra is None:
+                extra = k.item_keyword(text)
+        return extra
 
     def _next_skill(self, plan: list[dict[str, Any]]) -> str | None:
         newer_attack_known = False
