@@ -61,6 +61,10 @@ def _also(type_: str, d: dict) -> list[tuple[str, dict]]:
         return [("group.change", {"event": "following", "who": d.get("who")})]  # "You are already following $M." (Mundi names $M)
     if type_ == "items.failed" and d.get("action") == "give" and reason in ("hands_full", "cant_carry"):
         return [("items.give_failed", {"reason": "hands_full" if reason == "hands_full" else "too_heavy"})]
+    if type_ == "char.skills" and isinstance(d.get("practices"), int):
+        # tbaMUD's practice list says "You have N practice sessions remaining." (char.score practices);
+        # Mundi gives the number in the list: without it the state had 0 and no one ever trained
+        return [("char.score", {"practices": d["practices"]})]
     if type_ == "move.blocked" and d.get("who") == SELF:
         return [("move.failed", {"reason": "guarded"})]                         # "The guard humiliates you, and blocks your way."
     if type_ == "items.failed" and d.get("action") == "drop" and reason == "cursed":

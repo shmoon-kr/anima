@@ -157,3 +157,11 @@ def test_the_practice_list_is_named_by_proficiency_words():
     ev = MundiWsAdapter("Elysia").feed(env("char.skills", {"practices": 20, "spells": True, "skills": [
         {"name": "cure light", "percent": 0}, {"name": "armor", "percent": 45}, {"name": "bless", "percent": 90}]}))[0]
     assert ev.data["skills"] == {"cure light": "not learned", "armor": "average", "bless": "superb"}
+
+
+def test_the_practices_left_reach_the_state_as_on_tbamud():
+    from anima.runtime.state import AgentState
+    st = AgentState("Elysia")
+    for ev in MundiWsAdapter("Elysia").feed(env("char.skills", {"practices": 20, "spells": True, "skills": []})):
+        st.on_event(ev, 0.0)
+    assert st.practices == 20
