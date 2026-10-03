@@ -163,8 +163,11 @@ class AgentState:
                 self.hit_seen[d["victim"]] = now
             if SELF in (d.get("attacker"), d.get("victim")):
                 self.last_fight_t = now
-                # a hit does NOT wake a sleeper (fight.c update_pos keeps POS_SLEEPING while hp > 0):
-                # the position stays, so the wake_when_hit reflex sees "sleeping" and sends wake + stand
+            if d.get("attacker") == SELF and self.position in ("sleeping", "resting", "sitting"):
+                # a sleeper who is hit is set fighting without a word (fight.c:665 damage -> set_fighting,
+                # POS_FIGHTING): no message says so, so until we strike the wake_when_hit reflex still
+                # wakes us; once we strike, we are up whatever we last heard
+                self.position = "standing"
         elif t == "combat.death":
             if now - self.last_fight_t < FIGHT_WINDOW_S:
                 self.last_kill_t = now
