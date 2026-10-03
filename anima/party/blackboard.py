@@ -17,6 +17,9 @@ from typing import Any, Callable
 from anima.memoria import Memoria
 
 
+CLAIM_S = 5.0          # a member going for a thing on the floor holds it this long
+
+
 @dataclass
 class PartyBoard:
     memoria: Memoria
@@ -30,6 +33,7 @@ class PartyBoard:
     clock: Callable[[], float] = timescale.now
     states: dict[str, Any] = field(default_factory=dict)        # name -> AgentState
     items: dict[str, Any] = field(default_factory=dict)       # name -> its Items (share_gear)
+    claims: dict[tuple[int, str], dict[str, float]] = field(default_factory=dict)   # (room, thing) -> member -> when
     camp_start: float = 0.9                                     # D30: a member's rest need that makes the room camp
     camp_end: float = 0.3                                       # ... and the need below which nobody keeps it going
     ladder: Any = None                                          # anima.party.ladder.Ladder: choose zones by level (D31)
@@ -190,6 +194,20 @@ class PartyBoard:
     def register_items(self, name: str, items: Any) -> None:
         """A member's item judgment (anima.runtime.items.Items), so others can ask what it would wear."""
         self.items[name] = items
+
+    def claim(self, name: str, thing: str, copies: int = 1) -> bool:
+        """I go for this thing on the floor of my room. False if as many others went for it in the last
+        CLAIM_S as there are copies (round 69: two or three members sent `get sleeves` for one pair)."""
+        v = self.vnum(name)
+        if v is None:
+            return True
+        now = self.clock()
+        who = {n: t for n, t in self.claims.get((v, thing), {}).items() if now - t < CLAIM_S}
+        if name not in who and len(who) >= copies:
+            return False
+        who[name] = now
+        self.claims[(v, thing)] = who
+        return True
 
     # ------------------------------------------------------------ facts
     def vnum(self, name: str) -> int | None:

@@ -306,5 +306,8 @@ class Items:
             if obj is None or "take" not in obj.wear:
                 continue
             if obj.cost >= (min_cost or 0) or self._upgrade_text(obj.short) is not None or obj.type == "food":
+                claim = getattr(self.ctx.party, "claim", None)
+                if claim is not None and not claim(self.ctx.agent, obj.short, int(o.get("count", 1) or 1)):
+                    continue                                  # another member is already going for it
                 return self.k.item_keyword(obj.short)
         return None

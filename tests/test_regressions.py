@@ -653,3 +653,19 @@ def test_leader_waits_until_everyone_follows_before_going_home(memoria_proto):
     for _ in range(3):
         p.tick(3)
     assert [t for t in p.take("Vallen") if t in MOVES]
+
+
+def test_one_thing_on_the_floor_is_gone_for_by_one_member(memoria_proto):
+    # round 69: two or three members sent `get sleeves` for one pair; all but one got "not here"
+    p = PartyHarness(memoria_proto, ["Vallen", "Lil"])
+    together(p, ["Vallen", "Lil"])
+    sleeves = next(o for o in memoria_proto.world.objs.values() if o.short == "some cool newbie sleeves")
+    for n in ("Vallen", "Lil"):
+        p.rt[n].state.room["objects"] = [{"text": sleeves.long, "count": 1}]
+    a = p.rt["Vallen"].ctx.items.pickup_item(0)
+    b = p.rt["Lil"].ctx.items.pickup_item(0)
+    assert a == "sleeves" and b is None, (a, b)
+    assert p.rt["Vallen"].ctx.items.pickup_item(0) == "sleeves", "my own claim does not stop me"
+    for n in ("Vallen", "Lil"):
+        p.rt[n].state.room["objects"] = [{"text": sleeves.long, "count": 2}]
+    assert p.rt["Lil"].ctx.items.pickup_item(0) == "sleeves", "two pairs: one each"
