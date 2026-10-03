@@ -122,3 +122,10 @@ def test_walking_a_corridor_is_not_a_loop():
         answer(g, clock, "east", [("room", {"name": f"room {i}"})], source="role-leader/explore")
         clock.t -= 4
     assert seen == []
+
+
+def test_a_skill_whose_target_just_died_is_not_a_loop():
+    from anima.protocol.envelope import Event
+    from anima.runtime.loops import useless
+    assert useless([Event("skill.result", {"skill": "kick", "ok": False, "reason": "who"})]) is None
+    assert useless([Event("skill.result", {"skill": "kick", "ok": False, "reason": "no_mana"})]) is not None

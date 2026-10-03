@@ -42,6 +42,11 @@ def useless(events: list[Event]) -> tuple | None:
             no.append((ev.type, str(d.get("reason") or d.get("result") or "")))
         elif ev.type == "items.used" and d.get("empty"):
             no.append((ev.type, "empty"))                    # "It is empty."
+    if no and all(n == ("skill.result", "who") for n in no):
+        # "Kick whom?": the fight ended while the command waited in line (six hit the mob, it
+        # dies first). Not a loop, and pausing it left the fighter without that skill for the next
+        # fight (round 36). A skill sent with no fight is stopped by its behavior's `when`.
+        return None
     return tuple(sorted(no)) if no else None
 
 
