@@ -275,3 +275,25 @@ def test_a_full_bag_stops_buying_for_a_minute(memoria_proto):
     for _ in range(5):
         h.advance(5)
     assert not any(t.startswith(("buy ", "list")) for t in h.take()), "bag full: sell or junk first"
+
+
+def test_one_freed_place_ends_bag_full(memoria_proto):
+    # round 29: one `get` failed with too_many, then two minutes of junking: leggings, sleeves,
+    # a mace, the light, bread, pastry, meat
+    stuff = ["some cool newbie leggings", "some cool newbie sleeves", "a glowing newbie mace", "a bread"]
+    h = agent(memoria_proto, "Vallen", inventory=stuff,     # spares of what he wears: no upgrades
+              equipment=[("worn on legs", stuff[0]), ("worn on arms", stuff[1]), ("wielded", stuff[2])])
+    h.ev("items.failed", action="get", reason="too_many", text="a dagger")
+    out = []
+    for _ in range(6):
+        h.advance(5)
+        got = h.take()
+        out += got
+        for t in got:
+            if t.startswith("junk "):
+                kw = t.split()[1]
+                gone = next(x for x in stuff if kw in x)
+                stuff.remove(gone)
+                h.ev("items.used", action="junk", text=gone)
+                h.ev("items.inventory", items=[{"text": x, "count": 1} for x in stuff])
+    assert sum(t.startswith("junk ") for t in out) == 1, out

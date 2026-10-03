@@ -287,6 +287,10 @@ class AgentState:
         action, text = d.get("action"), d.get("text", "")
         if action in ("eat", "drop", "junk", "donate"):
             self._drop_item(text)
+            if action != "eat":
+                # a place is free now: "bag full" is over (round 29: one failed `get` junked seven
+                # things in two minutes, food and the light among them)
+                self.marks.pop("bag_full", None)
             if action == "eat":
                 self.hungry = False
         elif action == "drink":
