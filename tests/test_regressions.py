@@ -539,3 +539,20 @@ def test_members_arriving_a_moment_after_me_are_not_recounted(memoria_proto):
     assert "look" not in p.take("Vallen"), "a moment: they are on their way in"
     p.tick(3)
     assert "look" in p.take("Vallen"), "still not listed after a while: the listing is stale"
+
+
+def test_a_door_the_room_shows_closed_is_opened_before_the_step(memoria_proto):
+    # round 33: eight steps a round into "The door seems to be closed."
+    h = Harness(memoria_proto, agent="Vallen")
+    enter_game(h)
+    h.rt.state.room["exits"] = [{"dir": "south", "closed": True}, {"dir": "north", "closed": False}]
+    h.rt.ctx.source = __import__("anima.protocol.commands", fromlist=["Source"]).Source("behavior", "t")
+    h.take()
+    h.rt.ctx._step("south")
+    out = h.take()
+    assert out[0].startswith("open ") and out[1] == "south", out
+    h.ev("door.changed", command="open", who="Carmilla", door="door")
+    h.rt.ctx.move_pending_until = -1e9
+    h.rt.ctx.last_sent.clear()
+    h.rt.ctx._step("south")
+    assert h.take() == ["south"], "opened by someone here: just walk"

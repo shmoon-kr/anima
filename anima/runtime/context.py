@@ -476,8 +476,19 @@ class Context:
             self.memoria.graph.path_to_name(vnum, room, cond)
         if not path:
             return "no_path" if path is None else "arrived"
-        self.cmd(path[0], move=True, force=True)
+        self._step(path[0])
         return "moving"
+
+    def _step(self, d: str) -> None:
+        """One step. A door the room shows closed is opened first: walking into it only to be told
+        "The door seems to be closed." cost a turn each time (round 33: eight a round)."""
+        shown = {e.get("dir"): e for e in self.state.room.get("exits", []) if isinstance(e, dict)}
+        if shown.get(d, {}).get("closed"):
+            vnum = self.memoria.locator(self.agent).vnum
+            ex = self.memoria.world.rooms[vnum].exits.get(d) if vnum in self.memoria.world.rooms else None
+            word = (ex.keyword.split() or ["door"])[0] if ex is not None else "door"
+            self.cmd(f"open {word}", force=True)
+        self.cmd(d, move=True, force=True)
 
     def a_chase(self) -> str:
         """One room after a mob that fled from our fight, the way it went; not into a zone known to be
@@ -490,7 +501,7 @@ class Context:
         if ex is not None and ex.to in self.memoria.world.rooms and \
                 self.memoria.world.rooms[ex.to].zone in self.memoria.above_level_zones:
             return "no_path"
-        self.cmd(d, move=True, force=True)
+        self._step(d)
         return "moving"
 
     def a_go_back(self) -> str:
@@ -499,7 +510,7 @@ class Context:
         d = self.memoria.locator(self.agent).way_back()
         if d is None:
             return "no_path"
-        self.cmd(d, move=True, force=True)
+        self._step(d)
         return "moving"
 
     def a_explore(self) -> None:
@@ -518,7 +529,7 @@ class Context:
             if scores:
                 best = min(scores.values())
                 d = self.rng.choice(sorted(k for k, v in scores.items() if v == best))
-                self.cmd(d, move=True, force=True)
+                self._step(d)
             return
         exits = [e["dir"] for e in self.state.room.get("exits", []) if not e.get("closed")]
         if exits:

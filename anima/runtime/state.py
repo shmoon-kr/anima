@@ -204,6 +204,12 @@ class AgentState:
             self.undroppable.add(d.get("text", "").lower())
         elif t == "items.gave":
             self._drop_item(d.get("text", ""))
+        elif t == "door.changed" and d.get("command") == "open":
+            # someone here opened a door (which one is not said): the closed exits of this room
+            # are taken as open, so a step through does not stop to open it again
+            for e in self.room.get("exits", []):
+                if isinstance(e, dict) and e.get("closed"):
+                    e["closed"] = False
         elif t == "room":
             self.marks["room_seen"] = now
             self.room, self.room_dark = d, False
