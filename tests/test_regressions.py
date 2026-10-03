@@ -606,3 +606,18 @@ def test_coins_taken_are_gold_not_a_thing_in_the_bag(memoria_proto):
     h.ev("items.got", text="a little pile of gold coins", id="money:50/41682", **{"from": "the corpse of the orc"})
     h.ev("items.got", text="a pile of coins", **{"from": "the corpse of the orc"})       # text adapter: no id
     assert h.rt.state.inventory == ["a bread"]
+
+
+def test_danger_arriving_at_a_camp_wakes_the_sleepers_before_stepping_away(memoria_proto):
+    # round 52: the sentry stepped away from a green gelatinous blob, and her `wake`s went out
+    # in the next room ("no one by that name here"); five slept on beside it
+    p = PartyHarness(memoria_proto, ["Vallen", "Carmilla"])
+    together(p, ["Vallen", "Carmilla"])
+    p.rt["Vallen"].state.position = "sleeping"
+    p.take("Carmilla")
+    danger = p.rt["Carmilla"].program.policies["danger"][0]
+    p.ev("Carmilla", "occupant.arrived", who=danger)
+    out = p.take("Carmilla")
+    assert "wake Vallen" in out, out
+    moves = [i for i, t in enumerate(out) if t in ("north", "south", "east", "west", "up", "down")]
+    assert not moves or out.index("wake Vallen") < moves[0], out
