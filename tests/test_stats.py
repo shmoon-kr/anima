@@ -95,3 +95,14 @@ def test_growth_is_exp_over_the_level_span_and_a_death_costs_half_of_all_exp():
     m = compute(evs, span=span).members["A"]
     assert m.death_cost == pytest.approx(2.55)              # (50k + 1k) / 2 over a 10k span
     assert m.progress == pytest.approx(0.1 - 2.55)
+
+
+def test_loops_caught_are_counted_by_behavior():
+    from anima.stats import render
+    log = [ev(0, "Lil", "connection.in_game", how="entered"),
+           ev(5, "Lil", "runtime.loop", source="base/drink", command="drink canteen", pause_s=30),
+           ev(90, "Lil", "runtime.loop", source="base/drink", command="drink canteen", pause_s=60),
+           ev(95, "Vallen", "runtime.loop", source="base/hunt", command="kill fido", pause_s=30)]
+    st = compute(log)
+    assert st.loops == {"base/drink: drink": 2, "base/hunt: kill": 1} and not st.loops_replayed
+    assert "loops caught 3: base/drink: drink 2, base/hunt: kill 1" in render(st)

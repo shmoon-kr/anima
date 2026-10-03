@@ -64,6 +64,9 @@ class AgentRuntime:
                                         self.tasks.abandon)
         self.tasks.on_finish = self.selector.task_finished
         self.reflexes = ReflexEngine(self.ctx, self._publish, on_fire=lambda: self.tasks.pause(PREEMPT_S))
+        from anima.runtime.loops import LoopGuard
+        self.loops = LoopGuard(self.clock, self._publish)
+        self.ctx.loops = self.loops
 
     def _publish(self, type_: str, data: dict[str, Any]) -> None:
         self.bus.publish(self.stamper.stamp(type_, data))
@@ -74,6 +77,7 @@ class AgentRuntime:
     # ------------------------------------------------------------ events
     def on_event(self, ev: Event) -> None:
         now = self.clock()
+        self.loops.observe(ev)
         if ev.type == "command.sent":
             self.state.on_event(ev, now)
             return

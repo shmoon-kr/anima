@@ -192,6 +192,7 @@
 |---|---|
 | `runtime.reflex` | `{id, trigger_seq, action}` |
 | `runtime.behavior` | `{from, to, scores: [{id, score}], trigger_seq?}` — 행동 전환 |
+| `runtime.loop` | `{source, command, answer: [[type, reason]], count, pause_s}` — 같은 행동·반사·작업이 같은 명령에 같은 거절·무응답을 짧은 시간에 거듭 받아 그 명령을 `pause_s` 동안 멈춤 (D39, `anima/runtime/loops.py`) |
 | `runtime.task` | `{task_id, name, event: started\|step\|paused\|resumed\|succeeded\|failed\|abandoned, step?, reason?}` |
 | `runtime.party` | `{event: role_assigned\|goal_changed\|member_lost\|member_found…, detail}` |
 | `runtime.sigil` | `{event: loaded\|rejected, package, errors?}` |

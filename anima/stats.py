@@ -57,6 +57,8 @@ class Stats:
     scaled: bool = False                 # a level table and some member's level were known
     flow: "Flow | None" = None
     animus: "AnimusCost | None" = None
+    loops: dict[str, int] = field(default_factory=dict)      # "source: command word" -> runtime.loop count
+    loops_replayed: bool = False         # a recording from before the guard: counted by replaying it
 
     @property
     def progress_per_hour(self) -> float | None:
@@ -362,11 +364,36 @@ def compute(events: Iterable[Event], shared_clock: bool = True, window_min: floa
         if b - a >= GAP_S:
             gaps.append((a - start, b - a))
     st = Stats((end - start) / 3600.0, kills, gaps, members, leader, phases, shared_clock, dict(follows))
+    st.loops, st.loops_replayed = _loops(evs)
     st.scaled = bool(span) and any(span(a, lv) for a, lv in level.items())
     if shared_clock and leader and evs:
         st.flow = _flow(evs, leader, kills, 60.0 * window_min)
         st.animus = _animus(evs)
     return st
+
+
+def _loops(evs: list[Event]) -> tuple[dict[str, int], bool]:
+    """runtime.loop by behavior and command; in a recording from before the guard, what the guard
+    would have caught (replayed per agent)."""
+    def key(d: dict) -> str:
+        return f"{d.get('source', '?')}: {str(d.get('command', '')).split(' ')[0]}"
+    out: dict[str, int] = defaultdict(int)
+    recorded = [ev for ev in evs if ev.type == "runtime.loop"]
+    if recorded:
+        for ev in recorded:
+            out[key(ev.data)] += 1
+        return dict(out), False
+    if not any(ev.type == "command.sent" and (ev.data.get("source") or {}).get("kind") for ev in evs):
+        return {}, False
+    from anima.runtime.loops import LoopGuard
+    now = [0.0]
+    guards: dict[str, LoopGuard] = {}
+    for ev in evs:
+        now[0] = ev.t
+        if ev.agent not in guards:
+            guards[ev.agent] = LoopGuard(lambda: now[0], lambda t, d: out.__setitem__(key(d), out[key(d)] + 1))
+        guards[ev.agent].observe(ev)
+    return dict(out), True
 
 
 def merge(parts: list[Stats]) -> Stats:
@@ -382,7 +409,12 @@ def merge(parts: list[Stats]) -> Stats:
     leader = max(follows, key=follows.get) if follows else None
     base = next((st for st in parts if leader in st.members), parts[0])
     phases = base.phases
-    return Stats(base.hours, base.kills, base.gaps, members, leader, phases, False, dict(follows))
+    st = Stats(base.hours, base.kills, base.gaps, members, leader, phases, False, dict(follows))
+    for part in parts:
+        for k, c in part.loops.items():
+            st.loops[k] = st.loops.get(k, 0) + c
+        st.loops_replayed = st.loops_replayed or part.loops_replayed
+    return st
 
 
 def _phases(phases: list[str]) -> str:
@@ -469,6 +501,10 @@ def render(st: Stats, window_min: float | None = None) -> str:
     if reasons:
         lines += ["", "refused by reason: " + ", ".join(f"{r} {c}" for r, c in
                                                       sorted(reasons.items(), key=lambda x: -x[1]))]
+    if st.loops:
+        note = " (replayed: this recording is from before the guard)" if st.loops_replayed else ""
+        lines += ["", f"loops caught {sum(st.loops.values())}{note}: " + ", ".join(
+            f"{k} {c}" for k, c in sorted(st.loops.items(), key=lambda x: -x[1]))]
     if st.flow:
         lines += _render_flow(st, window_min)
     return "\n".join(lines)

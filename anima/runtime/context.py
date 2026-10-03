@@ -335,6 +335,12 @@ class Context:
         word = text.strip().split(" ", 1)[0].lower()
         if word in api.FORBIDDEN_COMMANDS or set(text) & api.FORBIDDEN_CHARS:
             raise ActionError(f"forbidden command {text!r}")
+        loops = getattr(self, "loops", None)
+        if loops is not None and self.source.kind in ("behavior", "reflex", "task"):
+            wait = loops.paused(self.source.id, text)
+            if wait > 0:                       # this got the same no again and again: held back (runtime.loop)
+                self.loop_blocked = (self.source.id, wait)
+                return False
         self.last_sent[text] = now
         if move:
             self.move_pending_until = now + MOVE_WAIT_S

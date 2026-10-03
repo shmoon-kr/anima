@@ -150,6 +150,11 @@ class UtilitySelector:
             self._last_do = now
             do = [best.item.exprs[k] for k in sorted(best.item.exprs, key=_order) if k.startswith("do[")]
             self.ctx.run_actions(do, src, priority=1, target=best.target)
+            held = getattr(self.ctx, "loop_blocked", None)
+            if held and held[0] == best.item.id:
+                # its command is held back for looping: let others have a turn, look again soon
+                self.block(best.item.name, min(5.0, held[1]))
+            self.ctx.loop_blocked = None
         return best
 
 
