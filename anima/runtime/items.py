@@ -9,6 +9,8 @@ both nudged by charisma, so a 10% margin is kept when deciding what we can affor
 """
 from __future__ import annotations
 
+import re
+
 from typing import TYPE_CHECKING, Any
 
 from anima.memoria import gear
@@ -48,11 +50,16 @@ class Items:
         v = self.ctx.memoria.locator(self.ctx.agent).vnum
         return self.shop_rooms().get(v) if v is not None else None
 
-    def _obj(self, text: str) -> Obj | None:
-        return self.k.item(text)
+    def _known(self, text: str) -> Obj | None:
+        """The very object, when the server named it (its id): not a guess among same-named ones."""
+        v = self.ctx.state.obj_vnum.get(text)
+        return self.ctx.memoria.world.objs.get(v) if v is not None else None
 
-    def _kw(self, text: str) -> str:
-        return self.k.item_keyword(text)
+    def _obj(self, text: str) -> Obj | None:
+        return self._known(text) or self.k.item(text)
+
+    def _kw(self, text: str, avoid: tuple[str, ...] | list[str] = ()) -> str:
+        return self.k.item_keyword(text, avoid)
 
     def equipped(self) -> dict[str, list[Obj | None]]:
         out: dict[str, list[Obj | None]] = {}
@@ -72,7 +79,10 @@ class Items:
     def _upgrade_text(self, text: str, eq: dict[str, list[Obj | None]] | None = None):
         """For a seen name: an upgrade only if every world object with that name is one (smallest gain).
         A name can stand for a usable and an unusable object (one restricted to some classes, one not)."""
-        if text in self.bought:
+        known = self._known(text)
+        if known is not None:
+            cands = [known]                            # the server said which one it is
+        elif text in self.bought:
             cands = [self.bought[text]]                # we bought it: we know which object it is
         else:
             # in a bag only what can be taken: a fixture of the same name (a torch on a wall) is not it
@@ -104,12 +114,29 @@ class Items:
         if best is None:
             return
         text, (slot, out, _) = best
+        worn = [s.get("text", "") for s in self.ctx.state.equipment]
+        carried = list(self.ctx.state.inventory)
         if out is not None:
-            self.ctx.cmd(f"remove {self._kw(out.short)}")
+            self.ctx.cmd(f"remove {self._kw(out.short, worn)}")
+            carried.append(out.short)                  # it is in the bag now, first in line
         verb = "wield" if slot == "wield" else "hold" if slot in ("hold", "light") else "wear"
-        self.ctx.cmd(f"{verb} {self._kw(text)}")
+        self.ctx.cmd(f"{verb} {self._nth(text, carried, first=out.short if out else None)}")
         self.ctx.cmd("equipment")
         self.ctx.cmd("inventory")
+
+    def _answers(self, text: str, kw: str) -> bool:
+        o = self._obj(text)
+        words = [k.lower() for k in o.keywords] if o and o.keywords else re.findall(r"[a-z]+", text.lower())
+        return kw in words
+
+    def _nth(self, text: str, carried: list[str], first: str | None = None) -> str:
+        """The word that gets this one out of the bag: a keyword the others do not answer to, else
+        tbaMUD's `N.keyword` counted in the bag's order (what was just taken off is first in it)."""
+        kw = self._kw(text, carried)
+        order = ([first] if first else []) + [x for x in self.ctx.state.inventory]
+        matching = [x for x in order if self._answers(x, kw)]
+        n = matching.index(text) + 1 if text in matching else 1
+        return kw if n == 1 else f"{n}.{kw}"
 
     # ------------------------------------------------------------ sharing
     def gear_gift(self) -> str | None:

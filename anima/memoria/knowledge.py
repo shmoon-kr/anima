@@ -89,8 +89,11 @@ class Knowledge:
         objs = self._obj_by_long.get(_key(t))
         return objs[0] if objs else None
 
-    def item_keyword(self, text: str) -> str:
-        """Keyword to name this item in commands: the object's first keyword, else the last word."""
+    def item_keyword(self, text: str, avoid: tuple[str, ...] | list[str] = ()) -> str:
+        """Keyword to name this item in commands: the object's first keyword, else the last word.
+        `avoid`: other things carried that the server could match first. A keyword none of them
+        answers to is chosen when there is one: 'wear plate' put the breast plate just taken off
+        back on instead of the bronze breast plate (round 18, 34 times)."""
         o = self.item(text)
         words = [w.lower() for w in re.findall(r"[A-Za-z]+", o.short if o else text)]
         if o and o.keywords:
@@ -98,7 +101,19 @@ class Knowledge:
             # the first keyword can be a generic one the server does not match (e.g. "water")
             kws = {k.lower() for k in o.keywords}
             shown = [w for w in reversed(words) if w in kws]       # the noun ends the name
-            return shown[0] if shown else o.keywords[0]
+            first = shown[0] if shown else o.keywords[0]
+            others = [x for x in avoid if _key(x) != _key(text)]
+            if others:
+                taken = set()
+                for x in others:
+                    ox = self.item(x)
+                    taken |= {k.lower() for k in ox.keywords} if ox and ox.keywords else \
+                        {w.lower() for w in re.findall(r"[A-Za-z]+", x)}
+                if first in taken:
+                    free = [w for w in shown if w not in taken] + [k.lower() for k in o.keywords if k.lower() not in taken]
+                    if free:
+                        return free[0]
+            return first
         return words[-1] if words else ""
 
     def zones_for_level(self, level: int) -> list[Zone]:

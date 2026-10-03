@@ -16,6 +16,19 @@ from anima.adapters.tbamud_text.ansi import strip_ansi
 from anima.protocol.envelope import SELF, Event, Stamper
 
 _ROOM_ID = re.compile(r"^[a-z]+:\d+:room:(\d+)$")
+_OBJ_ID = re.compile(r"^[a-z]+:\d+:obj:(\d+)/\d+$")
+
+
+def obj_vnum(id_: Any) -> int | None:
+    """`tba:30:obj:3040/36527` → 3040: which of the world's same-named objects this one is."""
+    m = _OBJ_ID.match(id_) if isinstance(id_, str) else None
+    return int(m.group(1)) if m else None
+
+
+def _with_vnum(item: Any) -> Any:
+    if isinstance(item, dict) and (v := obj_vnum(item.get("id"))) is not None:
+        return {**item, "vnum": v}
+    return item
 
 
 def vnum(id_: Any) -> Any:
@@ -105,6 +118,13 @@ class MundiWsAdapter:
         if env["type"] == "items.equipment":
             data["slots"] = [{**sl, "slot": _SLOT_LABEL.get(sl.get("slot"), sl.get("slot"))} if isinstance(sl, dict) else sl
                              for sl in data.get("slots", [])]
+        # which object of its name each one is (three 'a breast plate' in the world, AC 6 and 7)
+        if env["type"] == "items.equipment":
+            data["slots"] = [_with_vnum(sl) for sl in data["slots"]]
+        if env["type"] == "items.inventory":
+            data["items"] = [_with_vnum(it) for it in data.get("items", [])]
+        if env["type"] == "items.used":
+            data = _with_vnum(data)
         raw = [strip_ansi(line) for line in env.get("text", [])] if self.keep_raw else None
         if env["type"] == "room":
             # a player is a player (the text adapter's hint); Mundi names them pc:<name>

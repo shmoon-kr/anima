@@ -108,6 +108,16 @@ def test_equipment_slots_are_the_labels_anima_reads():
     assert [s["slot"] for s in ev.data["slots"]] == ["worn on body", "worn on finger"]
     assert all(s["slot"] in SLOT_OF_LABEL for s in ev.data["slots"])
 
+    assert [s.get("vnum") for s in ev.data["slots"]] == [18602, None], "the id says which object of its name"
+
+
+def test_items_carry_the_vnum_of_their_object():
+    a = MundiWsAdapter("Vallen")
+    inv = a.feed(env("items.inventory", {"items": [{"id": "tba:30:obj:3040/36527", "text": "a breast plate", "count": 1},
+                                                   {"id": "money:10/5", "text": "coins", "count": 1}]}))[0]
+    assert [i.get("vnum") for i in inv.data["items"]] == [3040, None]
+    used = a.feed(env("items.used", {"action": "wear", "id": "tba:30:obj:3046/1", "text": "a bronze breast plate"}))[0]
+    assert used.data["vnum"] == 3046
 
 def test_what_mundi_says_its_own_way_also_comes_as_the_protocols_event():
     a = MundiWsAdapter("Vallen")

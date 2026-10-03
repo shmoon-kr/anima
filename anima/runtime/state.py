@@ -85,6 +85,12 @@ class AgentState:
     # ------------------------------------------------------------ events
     _now: float = 0.0
     last_buy_t: float = -1e9
+    obj_vnum: dict[str, int] = field(default_factory=dict)  # a name → the object it is, when the server says
+
+    def _learn_vnums(self, items: list) -> None:
+        for it in items:
+            if isinstance(it, dict) and isinstance(it.get("vnum"), int) and it.get("text"):
+                self.obj_vnum[it["text"]] = it["vnum"]
 
     def on_event(self, ev: Event, now: float) -> None:
         self._now = now
@@ -152,12 +158,15 @@ class AgentState:
             self.toggles[d["name"]] = d["value"]
         elif t == "items.inventory":
             self.inventory = [i["text"] for i in d.get("items", []) for _ in range(i.get("count", 1))]
+            self._learn_vnums(d.get("items", []))
         elif t == "items.equipment":
             self.equipment = d.get("slots", [])
+            self._learn_vnums(self.equipment)
             self.has_light = any(s.get("slot") == "used as light" for s in self.equipment)
         elif t == "items.light_out" and d.get("who") == SELF:
             self.has_light = False
         elif t == "items.used":
+            self._learn_vnums([d])
             self._item_used(d)
         elif t in ("items.got", "items.received"):
             self.inventory.append(d.get("text", ""))

@@ -134,8 +134,8 @@
 ### 물건
 | type | data | 비고 |
 |---|---|---|
-| `items.inventory` | `{items: [{id?, text, count}]}` | `inventory` 결과 전체 |
-| `items.equipment` | `{slots: [{slot, id?, text}]}` | `equipment` 결과 전체 |
+| `items.inventory` | `{items: [{id?, vnum?, text, count}]}` | `inventory` 결과 전체 |
+| `items.equipment` | `{slots: [{slot, id?, vnum?, text}]}` | `equipment` 결과 전체 |
 | `items.got` | `{text, id?, from?}` | `You get X [from Y].` |
 | `items.received` | `{text, id?, from}` | `X gives you Y.` |
 | `items.gave` | `{text, id?, to}` | |
@@ -235,3 +235,4 @@ LLM 은 느린 감각기관이다. 질문은 비동기, 답은 이벤트로 온�
 - v0 (2026-10-03, 2단계 S1, 호환 추가): 2부 §7 에 `runtime.animus` (Animus 덮어쓰기 레이어 변경 기록).
 - v0 (2026-10-03, 2부 §7, 호환 추가): `runtime.human` (사람의 입력과 조종권).
 - v0 (2026-10-03, 호환 추가): `runtime.error`.
+- v0 (2026-10-03, 호환 추가): `items.inventory`·`items.equipment`·`items.used` 의 `vnum?` — 서버가 물건 id 를 주면 그 물건의 원형 번호. 같은 이름의 물건이 여럿이라 이름만으로는 어느 것인지 모른다.

@@ -32,6 +32,42 @@ def test_a_better_body_armor_replaces_the_old_one(memoria_proto):
     assert out[out.index("remove vest")+1] == "wear plate"
 
 
+
+def mundi_gear(h, inventory=(), equipment=()):
+    """What the Mundi adapter gives: each item with the vnum from its id."""
+    h.ev("items.inventory", items=[{"text": t, "count": 1, "vnum": v} for t, v in inventory])
+    h.ev("items.equipment", slots=[{"slot": sl, "text": t, "vnum": v} for sl, t, v in equipment])
+    h.take()
+
+
+def test_the_server_says_which_same_named_object_it_is(memoria_proto):
+    # round 18: 'a breast plate' was guessed as an AC 6 one of its name (three in the world) and the
+    # AC 6 bronze breast plate looked better than the AC 7 one worn: off and on, 34 times
+    h = agent(memoria_proto, "Lumina")
+    mundi_gear(h, inventory=[("a bronze breast plate", 3046)], equipment=[("worn on body", "a breast plate", 3040)])
+    assert h.rt.ctx.items.upgrade_item() is None
+    h.advance(6)
+    assert not any(t.startswith(("remove", "wear")) for t in h.take())
+
+
+def test_the_upgrade_is_not_mistaken_for_what_was_just_taken_off(memoria_proto):
+    # every keyword of the breast plate is the bronze one's too, and the bronze one goes first in the bag
+    h = agent(memoria_proto, "Lumina")
+    mundi_gear(h, inventory=[("a breast plate", 3040)], equipment=[("worn on body", "a bronze breast plate", 3046)])
+    h.advance(6)
+    out = h.take()
+    assert "remove bronze" in out or "remove plate" in out, out
+    assert "wear 2.plate" in out, out
+
+
+def test_a_word_only_the_upgrade_answers_to_is_used(memoria_proto):
+    h = agent(memoria_proto, "Lumina")
+    mundi_gear(h, inventory=[("a bronze breast plate", 3046)], equipment=[("worn on body", "a bright green newbie vest", 18602)])
+    h.ev("items.inventory", items=[{"text": "a bronze breast plate", "count": 1, "vnum": 3046},
+                                   {"text": "a breast plate", "count": 1, "vnum": 29243}])
+    items = h.rt.ctx.items
+    assert items._nth("a bronze breast plate", ["a breast plate"]) == "bronze"
+
 def test_class_and_weapon_kind_limits(memoria_proto):
     thief = agent(memoria_proto, "Carmilla", inventory=["a long sword"])      # slashes: no backstab
     thief.advance(6)
