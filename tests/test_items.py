@@ -133,6 +133,8 @@ def test_containers_are_filled_at_the_fountain(memoria_proto):
     h.ev("room", name=r.name, desc=r.desc, exits=[{"dir": d, "closed": False} for d in r.exits], occupants=[],
          objects=[{"text": "A large fountain carved from blue-streaked marble is here, bubbling merrily.", "count": 1}],
          dark=False)
+    real, ticks = h.rt.ctx.clock, iter(range(10 ** 6))
+    h.rt.ctx.clock = lambda: real() + next(ticks) * 1e-3     # live: time goes on between two readings
     h.advance(4)
     assert not any(t.startswith("fill") for t in h.take()), "full since it was bought: nothing to fill"
     h.ev("items.used", action="drink", text="a canteen")

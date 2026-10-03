@@ -221,6 +221,7 @@ class Context:
             "pick_target": self._pick_target,
             "path_len": self._path_len, "in_zone_of": self._in_zone_of,
             "secs_since": lambda key: self.clock() - self.state.marks.get(key, NEVER),
+            "later": lambda a, b: self.state.marks.get(a, NEVER) > self.state.marks.get(b, NEVER),
             "if_else": lambda c, a, b: a if c else b,
             "item_of": self._inventory_of,
             "item_count": lambda kind: sum(1 for t in self.state.inventory

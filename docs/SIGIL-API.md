@@ -126,6 +126,7 @@
 | `path_len(room)` | 그 방(이름)까지 걸음 수, 길이 없으면 null |
 | `in_zone_of(room)` | 지금 방이 그 방(이름)과 같은 지역 |
 | `secs_since(key)` | mark(key) 이후 초 (한 번도 없으면 큰 값). 작업 실패는 'failed:<작업>' 으로 자동 기록 |
+| `later(a, b)` | mark(a) 가 mark(b) 보다 나중인가 (없는 표시는 가장 이른 것). secs_since 둘의 비교는 두 번 읽는 사이에 시계가 가서 틀린다 |
 | `if_else(cond, a, b)` | cond 가 참이면 a, 아니면 b |
 | `item_of(kind)` | 가진 그 종류 물건의 명령용 키워드 (없으면 null) |
 | `item_count(kind)` | 가진 그 종류 물건 수 |
