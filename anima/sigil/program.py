@@ -321,7 +321,9 @@ class _Validator:
 
     def reflex(self, it: Item) -> None:
         s = it.spec
-        self.allowed(it, {"on", "if", "do", "cooldown_s", "description"})
+        self.allowed(it, {"on", "if", "do", "cooldown_s", "priority", "description"})
+        if s.get("priority", 0) not in (0, 1):
+            self.err(it.id, "priority must be 0 (ahead of behaviors, the default) or 1 (in line with them)")
         if not s.get("on"):
             self.err(it.id, "needs `on` (event type)")
         if not s.get("do"):

@@ -63,6 +63,7 @@ reflexes:
     if: "event.reason in ['too_many', 'too_heavy']"
     do: ["mark('bag_full')"]
   setup_on_enter:
+    priority: 1                       # 할 일 정리: 행동이 보낸 명령을 앞지르지 않는다 (로그인 직후 3초 밀려 낡은 명령이 됐다)
     on: connection.in_game
     do:
       - "ensure_toggle('autoloot', true)"
@@ -75,10 +76,12 @@ reflexes:
       - "send('look')"           # 재접속(Reconnecting.)이면 서버가 방을 보여주지 않는다
       - "mark('entered')"
   keep_toggles_on:                    # 토글은 보낼 때마다 뒤집힌다: 꺼졌다는 응답이면 다시 켠다
+    priority: 1
     on: toggle.state
     if: "event.name in ['autoloot', 'autogold', 'autosplit', 'autoassist'] and event.value == false"
     do: ["ensure_toggle(event.name, true)"]
   wimpy_follows_policy:
+    priority: 1
     on: char.vitals_max
     do: ["set_wimpy(self.hp_max * policy.flee_pct / 100)"]
   flee_when_low:
@@ -131,6 +134,7 @@ reflexes:
     on: items.give_failed
     do: ["mark('give_failed')"]
   inventory_every_2min:                # 만든 음식·받은 물건 등 소지품 그림이 낡지 않게
+    priority: 1
     on: prompt
     if: "self.position != 'sleeping'"
     do: ["send('inventory')"]

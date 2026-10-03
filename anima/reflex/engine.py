@@ -37,7 +37,8 @@ class ReflexEngine:
             self._last[item.name] = now
             do = [item.exprs[k] for k in sorted(item.exprs, key=_order) if k.startswith("do[")]
             src = Source("reflex", item.id, reason=f"on {ev.type}", trigger_seq=ev.seq or None)
-            self.ctx.run_actions(do, src, priority=0, event=ev)
+            # 0: ahead of what behaviors queued (flee); 1: housekeeping that can wait its turn
+            self.ctx.run_actions(do, src, priority=int(item.spec.get("priority", 0)), event=ev)
             self.publish("runtime.reflex", {"id": item.id, "trigger_seq": ev.seq, "action": [e.src for e in do]})
             self.on_fire()
 

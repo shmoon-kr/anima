@@ -92,6 +92,7 @@ def test_disable_and_replace():
     ({"behaviors": {"b": {"considerations": ["nosuch(1)"], "do": ["rest()"]}}}, "unknown function"),
     ({"behaviors": {"b": {"considerations": ["linear(1)"], "do": ["rest()"]}}}, "takes 3 arguments"),
     ({"reflexes": {"r": {"if": "true", "do": ["flee()"]}}}, "needs `on`"),
+    ({"reflexes": {"r": {"on": "prompt", "do": ["flee()"], "priority": 2}}}, "priority must be"),
     ({"tasks": {"t": {"steps": [{"fly": 1}]}}}, "a step needs one of"),
     ({"asks": {"a": {"when": "true", "question": "q", "tier": "gpt", "timeout_s": 5, "default": True,
                      "schema": {"type": "boolean"}}}}, "tier must be one of"),

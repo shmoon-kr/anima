@@ -516,3 +516,12 @@ def test_a_spell_the_server_has_not_got_is_not_cast_or_practised_again(memoria_p
     out = " ".join(h.take())
     assert "burning hands" not in out and "magic missile" in out, out
     assert not h.rt.ctx._knows("burning hands")
+
+
+def test_login_housekeeping_queues_behind_what_behaviors_send(memoria_proto):
+    # round 25: eight setup commands went first (reflexes jump the queue) and the follower's
+    # `follow`/`group join` left 3 s late, after the leader had moved: no_person, join_who
+    h = Harness(memoria_proto, agent="Lil")
+    enter_game(h)
+    prio = {s[0]: s[2] for s in h.sent}
+    assert prio.get("autoloot") == 1 and prio.get("inventory") == 1, prio
