@@ -556,3 +556,23 @@ def test_a_door_the_room_shows_closed_is_opened_before_the_step(memoria_proto):
     h.rt.ctx.last_sent.clear()
     h.rt.ctx._step("south")
     assert h.take() == ["south"], "opened by someone here: just walk"
+
+
+def test_rest_and_stand_up_agree_and_mana_is_not_a_reason_without_spells(memoria_proto):
+    # round 39: rest scored a little for mana under 90% and stand_up fired at 50%: rest, stand,
+    # rest, stand every 6 s. And rest_mp_pct 0 (a warrior) still rested for mana.
+    h = Harness(memoria_proto, agent="Vallen")             # rest_mp_pct 0
+    enter_game(h)
+    h.ev("prompt", hp=40, mp=30, mv=90)
+    h.take()
+    for _ in range(4):
+        h.advance(6)
+    assert not any(t in ("rest", "sleep") for t in h.take()), "full hit points: mana is no reason to rest"
+    h2 = Harness(memoria_proto, agent="Lil")               # a mage: rests for mana
+    enter_game(h2)
+    h2.ev("prompt", hp=40, mp=70, mv=90)
+    h2.ev("position", position="resting", **{"from": "standing"})
+    h2.take()
+    for _ in range(4):
+        h2.advance(6)
+    assert "stand" not in h2.take(), "70% mana: rest still has something to give"
