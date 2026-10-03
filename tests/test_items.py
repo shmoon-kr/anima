@@ -296,4 +296,17 @@ def test_one_freed_place_ends_bag_full(memoria_proto):
                 stuff.remove(gone)
                 h.ev("items.used", action="junk", text=gone)
                 h.ev("items.inventory", items=[{"text": x, "count": 1} for x in stuff])
-    assert sum(t.startswith("junk ") for t in out) == 1, out
+    # four carried when "too many": the cap is 4, and two places are kept free (gold and one thing
+    # from a corpse); then it stops (round 29: seven junked in two minutes)
+    assert sum(t.startswith("junk ") for t in out) == 2, out
+
+
+def test_the_bag_is_kept_short_of_the_servers_limit(memoria_proto):
+    # round 42: bags at the server's limit (below policy.inv_hard at low levels); autoloot could
+    # not take the gold from corpses ("You can't carry that many items.")
+    stuff = ["some cool newbie leggings", "some cool newbie sleeves", "a glowing newbie mace"]
+    h = agent(memoria_proto, "Vallen", inventory=stuff,
+              equipment=[("worn on legs", stuff[0]), ("worn on arms", stuff[1]), ("wielded", stuff[2])])
+    h.rt.state.carry_cap = 3
+    h.advance(5)
+    assert any(t.startswith("junk ") for t in h.take()), "at the limit: junk before the next corpse"

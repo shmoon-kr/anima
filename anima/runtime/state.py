@@ -90,6 +90,7 @@ class AgentState:
     # ------------------------------------------------------------ events
     _now: float = 0.0
     last_buy_t: float = -1e9
+    carry_cap: int = 0        # how many things the server lets me carry, learned from "too many"
     obj_vnum: dict[str, int] = field(default_factory=dict)  # a name → the object it is, when the server says
 
     def _learn_vnums(self, items: list) -> None:
@@ -109,6 +110,11 @@ class AgentState:
             # Mundi has only some of tbaMUD's spells so far: one it lacks is not cast or practised
             # again (round 20: a spell was cast into "not in Mundi yet")
             self.missing.add(self.last_cast)
+        if d.get("reason") == "too_many" and t in ("items.failed", "items.cannot_take", "shop.result") and self.inventory:
+            # the count the server stopped me at (it grows with level: learn it again each time)
+            self.carry_cap = len(self.inventory)
+        if t == "level.up":
+            self.carry_cap = 0
         if t == "items.failed" and d.get("action") == "drink" and d.get("reason") == "empty":
             self.drink_empty_t = self._now
             self.marks["drink_empty"] = self._now

@@ -124,7 +124,7 @@ class Context:
         simple = {"name": self.agent, "hp": s.hp, "hp_max": s.hp_max, "mp": s.mp, "mp_max": s.mp_max, "mv": s.mv,
                   "mv_max": s.mv_max, "level": s.level, "gold": s.gold, "practices": s.practices,
                   "position": s.position, "hungry": s.hungry, "thirsty": s.thirsty, "has_light": s.has_light,
-                  "in_game": s.in_game, "inventory": s.inventory, "equipment": [e.get("text") for e in s.equipment]}
+                  "in_game": s.in_game, "inventory": s.inventory, "carry_cap": s.carry_cap, "equipment": [e.get("text") for e in s.equipment]}
         if k in simple:
             return simple[k]
         return {

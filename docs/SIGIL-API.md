@@ -35,6 +35,7 @@
 | `self.behavior` | text | 지금 고른 행동 이름 |
 | `self.task` | text | 실행 중인 작업 이름 (없으면 null) |
 | `self.inventory` | list | 가진 물건 짧은 설명 목록 |
+| `self.carry_cap` | number | 서버가 들게 해 주는 물건 수 (가방이 찼다는 답을 받았을 때의 개수, 모르면 0) |
 | `self.equipment` | list | 입은 물건 목록 |
 | `room.name` | text | 현재 방 이름 |
 | `room.vnum` | number | 현재 방 번호 (Memoria 추정, 모르면 null) |

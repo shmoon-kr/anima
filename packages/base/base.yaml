@@ -239,7 +239,8 @@ behaviors:
   junk_surplus:
     weight: 0.5
     # 가방이 차서 무엇이 실패했으면(낮은 레벨은 inv_hard 전에 찬다) 그때도 버린다
-    when: "not self.fighting and (len(self.inventory) > policy.inv_hard or secs_since('bag_full') < 120)"
+    # 서버 한도 한 칸 전에 비워 둔다: 가방이 차면 autoloot 가 금화도 못 줍는다 (round 42)
+    when: "not self.fighting and (len(self.inventory) > policy.inv_hard or secs_since('bag_full') < 120 or (self.carry_cap > 0 and len(self.inventory) >= self.carry_cap - 1))"
     considerations: ["bool(surplus_item(policy.inv_keep))"]
     do: ["stand()", "send('junk ' + surplus_item(policy.inv_keep))", "send('inventory')"]
     every_s: 4
