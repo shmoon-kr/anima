@@ -26,7 +26,14 @@ def vnum(id_: Any) -> Any:
 
 
 _CLASSES = {"mage": "magic_user"}
-_ALREADY = {"stand": "standing", "sit": "sitting", "rest": "resting", "sleep": "sleeping"}      # the party's class words → Mundi's (crates/mundi-sim Class)
+_ALREADY = {"stand": "standing", "sit": "sitting", "rest": "resting", "sleep": "sleeping"}
+# Mundi's wear positions → the equipment list's labels, as anima reads them (act.informative.c wear_where)
+_SLOT_LABEL = {"light": "used as light", "finger_right": "worn on finger", "finger_left": "worn on finger",
+               "neck_1": "worn around neck", "neck_2": "worn around neck", "body": "worn on body",
+               "head": "worn on head", "legs": "worn on legs", "feet": "worn on feet", "hands": "worn on hands",
+               "arms": "worn on arms", "shield": "worn as shield", "about": "worn about body",
+               "waist": "worn about waist", "wrist_right": "worn around wrist", "wrist_left": "worn around wrist",
+               "wield": "wielded", "hold": "held"}      # the party's class words → Mundi's (crates/mundi-sim Class)
 
 
 def mundi_class(name: str) -> str:
@@ -54,6 +61,9 @@ class MundiWsAdapter:
         if env["type"] in ("room", "room.exits_listed"):
             data["exits"] = [{**e, "to_id": vnum(e.get("to_id"))} if isinstance(e, dict) and "to_id" in e else e
                              for e in data.get("exits", [])]
+        if env["type"] == "items.equipment":
+            data["slots"] = [{**sl, "slot": _SLOT_LABEL.get(sl.get("slot"), sl.get("slot"))} if isinstance(sl, dict) else sl
+                             for sl in data.get("slots", [])]
         raw = [strip_ansi(line) for line in env.get("text", [])] if self.keep_raw else None
         out = [self.stamper.stamp(env["type"], data, raw=raw or None)]
         # "You are already standing." tells the position (PROTOCOL.md `position`, as the text adapter

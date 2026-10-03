@@ -96,3 +96,14 @@ def test_already_in_a_position_tells_the_position():
     evs = a.feed(env("position.refused", {"command": "stand", "reason": "already"}, ["You are already standing."]))
     assert [e.type for e in evs] == ["position.refused", "position"] and evs[1].data == {"position": "standing"}
     assert len(a.feed(env("position.refused", {"command": "stand", "reason": "fighting"}))) == 1
+
+
+def test_equipment_slots_are_the_labels_anima_reads():
+    # Mundi said "body"; anima knows "worn on body" (gear.SLOT_OF_LABEL), so it saw nothing worn and
+    # tried to wear a second vest again and again ("You're already wearing something on your body.")
+    from anima.memoria.gear import SLOT_OF_LABEL
+    ev = MundiWsAdapter("Vallen").feed(env("items.equipment", {"slots": [
+        {"slot": "body", "id": "tba:186:obj:18602/1", "text": "a bright green newbie vest"},
+        {"slot": "finger_left", "text": "a ring"}]}))[0]
+    assert [s["slot"] for s in ev.data["slots"]] == ["worn on body", "worn on finger"]
+    assert all(s["slot"] in SLOT_OF_LABEL for s in ev.data["slots"])
