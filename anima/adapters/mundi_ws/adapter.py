@@ -80,6 +80,12 @@ class MundiWsAdapter:
         if env["type"] in ("room", "room.exits_listed"):
             data["exits"] = [{**e, "to_id": vnum(e.get("to_id"))} if isinstance(e, dict) and "to_id" in e else e
                              for e in data.get("exits", [])]
+        if env["type"] == "shop.result" and data.get("who", SELF) == SELF:
+            # PROTOCOL.md: {action: buy|sell, ok, reason?}; Mundi puts a failure's reason in action
+            if data.get("action") in ("buy", "sell"):
+                data["ok"] = True
+            else:
+                data = {**data, "action": "buy", "ok": False, "reason": data.get("action")}
         if env["type"] == "items.equipment":
             data["slots"] = [{**sl, "slot": _SLOT_LABEL.get(sl.get("slot"), sl.get("slot"))} if isinstance(sl, dict) else sl
                              for sl in data.get("slots", [])]

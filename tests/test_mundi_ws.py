@@ -137,3 +137,10 @@ def test_a_dark_room_with_an_id_still_says_where_we_are():
     mem = Memoria.from_tbamud(world_dir())
     mem.locator("Vallen").on_event(ev)
     assert mem.locator("Vallen").vnum == 3066 and mem.locator("Vallen").certain
+
+
+def test_a_shop_failure_is_said_as_the_protocol_says_it():
+    a = MundiWsAdapter("Senia")
+    ev = a.feed(env("shop.result", {"action": "too_many", "who": "self", "text": "pants"}))[0]
+    assert ev.data["action"] == "buy" and ev.data["ok"] is False and ev.data["reason"] == "too_many"
+    assert a.feed(env("shop.result", {"action": "buy", "who": "self", "text": "pants"}))[0].data["ok"] is True

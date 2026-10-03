@@ -54,6 +54,10 @@ reflexes:
     on: items.failed
     if: "event.reason in ['too_many', 'too_heavy']"   # (hands_full on a give is the receiver's bag)
     do: ["mark('bag_full')"]
+  bag_full_shop:                      # 산 것을 들 수 없다 (shop.result ok false)
+    on: shop.result
+    if: "event.ok == false and event.reason in ['too_many', 'too_heavy']"
+    do: ["mark('bag_full')"]
   bag_full_tba:                       # tbaMUD 문구로는 items.cannot_take
     on: items.cannot_take
     if: "event.reason in ['too_many', 'too_heavy']"

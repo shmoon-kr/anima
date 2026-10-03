@@ -31,7 +31,7 @@ def useless(events: list[Event]) -> tuple | None:
     no = []
     for ev in events:
         d = ev.data or {}
-        if ev.type in _FAILURE_TYPES or ev.type.endswith((".failed", ".refused")):
+        if ev.type in _FAILURE_TYPES or ev.type.endswith((".failed", ".refused")) or d.get("ok") is False:
             no.append((ev.type, str(d.get("reason") or d.get("result") or "")))
         elif ev.type == "items.used" and d.get("empty"):
             no.append((ev.type, "empty"))                    # "It is empty."
