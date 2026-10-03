@@ -88,6 +88,10 @@ class AgentState:
         self._now = now
         self.last_seq = ev.seq or self.last_seq
         t, d = ev.type, ev.data
+        if t == "command.refused" and d.get("reason") in ("resting", "sitting", "sleeping"):
+            # "Nah... You feel too relaxed to do that.." says where we are: after a reconnect nothing
+            # else does, and every behavior's stand() trusts this
+            self.position = d["reason"]
         if t == "shop.list":
             self.shop_list, self.shop_list_room = list(d.get("items", [])), self.room.get("name")
         if t == "prompt":

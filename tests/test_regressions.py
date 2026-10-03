@@ -441,3 +441,18 @@ def test_resting_without_prompts_asks_for_the_numbers(memoria_proto):
     p.take("Vallen")
     p.tick(40)
     assert "" not in p.take("Vallen"), "standing: the world talks to us anyway"
+
+
+def test_a_refusal_for_resting_says_we_are_resting(memoria_proto):
+    # Round 8: anima restarted, the leader came back linkless and resting ("reconnected" says no
+    # position); every command got "You feel too relaxed..." and no kill was made in 30 game minutes.
+    p = PartyHarness(memoria_proto, ["Vallen", "Lil"])
+    together(p, ["Vallen", "Lil"])
+    p.ev("Vallen", "command.refused", reason="resting")
+    assert p.rt["Vallen"].state.position == "resting"
+    p.take("Vallen")
+    sent = []
+    for _ in range(6):
+        p.tick()
+        sent += p.take("Vallen")
+    assert "stand" in sent, sent
