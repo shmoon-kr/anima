@@ -120,3 +120,18 @@ def test_what_mundi_says_its_own_way_also_comes_as_the_protocols_event():
     room = a.feed(env("room", {**ROOM, "occupants": [{"id": "pc:ana", "text": "Ana is standing here.", "hints": [], "flags": []},
                                                      {"id": "tba:30:mob:3060/1", "text": "A cityguard stands here.", "hints": [], "flags": []}]}))[0]
     assert [o["hints"] for o in room.data["occupants"]] == [["player"], []]
+
+
+def test_a_dark_room_with_an_id_still_says_where_we_are():
+    # Mundi: the leader came back in a dark alley (room.dark has the room's id); anima took the
+    # place for unknown and the party stood recounting itself.
+    from anima.memoria import Memoria
+    from conftest import world_dir
+    import pytest
+    if not world_dir().exists():
+        pytest.skip("tbaMUD world files not present")
+    ev = MundiWsAdapter("Vallen").feed(env("room.dark", {"id": "tba:30:room:3066"}))[0]
+    assert ev.data["id"] == 3066
+    mem = Memoria.from_tbamud(world_dir())
+    mem.locator("Vallen").on_event(ev)
+    assert mem.locator("Vallen").vnum == 3066 and mem.locator("Vallen").certain

@@ -73,7 +73,7 @@ class MundiWsAdapter:
             return []
         data = env.get("data")
         data = dict(data) if isinstance(data, dict) else {}
-        if env["type"] == "room":
+        if env["type"] in ("room", "room.dark"):
             data["id"] = vnum(data.get("id"))
         if env["type"] in ("room", "room.exits_listed"):
             data["exits"] = [{**e, "to_id": vnum(e.get("to_id"))} if isinstance(e, dict) and "to_id" in e else e

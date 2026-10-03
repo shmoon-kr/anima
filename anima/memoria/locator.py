@@ -64,7 +64,7 @@ class Locator:
         elif t == "room":
             self._arrive(d)
         elif t == "room.dark":
-            self._arrive_dark()
+            self._arrive_dark(d)
         elif t == "move.failed":
             if self._pending and self.vnum is not None and d.get("reason") in ("no_exit", "need_boat", "forbidden", "guarded", "closed", "locked"):
                 self.seen[(self.vnum, self._pending)] = self.seen.get((self.vnum, self._pending), 0) + 1000
@@ -106,9 +106,12 @@ class Locator:
             return
         self.vnum, self.certain = None, False
 
-    def _arrive_dark(self) -> None:
+    def _arrive_dark(self, d: dict | None = None) -> None:
         prev, pending = self.vnum, self._pending
         self._pending = None
+        if d and isinstance(d.get("id"), int) and d["id"] in self.graph.world.rooms:
+            self._set(prev, pending, d["id"], True)          # an engine that knows the room says which, dark or not
+            return
         expected = self._expected(prev, pending)
         if expected is not None:
             self._set(prev, pending, expected, True)
