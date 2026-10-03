@@ -117,6 +117,8 @@ def test_what_mundi_says_its_own_way_also_comes_as_the_protocols_event():
     assert types(env("items.failed", {"action": "give", "reason": "hands_full", "text": "a waybread"})) == [("items.give_failed", {"reason": "hands_full"})]
     assert types(env("items.failed", {"action": "drop", "reason": "cursed", "text": "a ring"})) == [("items.cannot_drop", {"text": "a ring", "reason": "cursed"})]
     assert types(env("group.failed", {"reason": "not_in_group"})) == []
+    assert types(env("move.blocked", {"who": "self"})) == [("move.failed", {"reason": "guarded"})]
+    assert types(env("move.blocked", {"who": "Ana", "who_id": "pc:ana"})) == [], "someone else blocked: not ours"
     room = a.feed(env("room", {**ROOM, "occupants": [{"id": "pc:ana", "text": "Ana is standing here.", "hints": [], "flags": []},
                                                      {"id": "tba:30:mob:3060/1", "text": "A cityguard stands here.", "hints": [], "flags": []}]}))[0]
     assert [o["hints"] for o in room.data["occupants"]] == [["player"], []]

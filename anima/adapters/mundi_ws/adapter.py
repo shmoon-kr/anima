@@ -52,6 +52,8 @@ def _also(type_: str, d: dict) -> list[tuple[str, dict]]:
         return [("group.change", {"event": "following", "who": None})]        # "You are already following $M."
     if type_ == "items.failed" and d.get("action") == "give" and reason in ("hands_full", "cant_carry"):
         return [("items.give_failed", {"reason": "hands_full" if reason == "hands_full" else "too_heavy"})]
+    if type_ == "move.blocked" and d.get("who") == SELF:
+        return [("move.failed", {"reason": "guarded"})]                         # "The guard humiliates you, and blocks your way."
     if type_ == "items.failed" and d.get("action") == "drop" and reason == "cursed":
         return [("items.cannot_drop", {"text": d.get("text", ""), "reason": "cursed"})]
     return []

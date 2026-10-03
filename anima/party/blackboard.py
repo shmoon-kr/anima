@@ -288,7 +288,7 @@ class PartyBoard:
             return here
         if here is None:
             return left[0]
-        cond = self.memoria.conditions(has_light=self._leader_lit())
+        cond = self.memoria.conditions(has_light=self._leader_lit(), agent=self.leader)
 
         def steps(v: int) -> int:
             p = self.memoria.graph.path(here, v, cond, max_rooms=4000)
