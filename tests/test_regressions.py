@@ -306,3 +306,36 @@ def test_a_follower_kept_out_walks_to_the_door_to_wait(memoria_proto):
     assert p.board.value("wait_vnum", "Lil") == entrance
     first = p.mem.graph.path(market, entrance, p.mem.conditions(agent="Lil"))[0]
     assert first in p.take("Lil"), "on its way to the door"
+
+
+def test_a_fresh_entry_forgets_the_group_so_the_leader_forms_it_again(memoria_proto):
+    # Mundi (2026-10-03): after a server restart the group was gone but the leader still thought it
+    # led one; the others got "Vallen is not in a group!" and nobody assisted in its fights.
+    p = PartyHarness(memoria_proto, ["Vallen", "Lil"])
+    together(p, ["Vallen", "Lil"])
+    assert p.rt["Vallen"].state.in_group and p.rt["Lil"].state.following == "Vallen"
+    p.ev("Lil", "connection.in_game", how="reconnected")
+    assert p.rt["Lil"].state.following == "Vallen", "a reconnect keeps them"
+    for n in ("Vallen", "Lil"):
+        p.ev(n, "connection.closed", reason="remote")
+        p.ev(n, "connection.in_game", how="entered")
+    assert not p.rt["Vallen"].state.in_group and p.rt["Lil"].state.following is None
+    for n in ("Vallen", "Lil"):
+        p.room(n, NEWBIE_ENTRANCE)
+    p.take("Vallen")
+    sent = []
+    for _ in range(15):
+        p.tick()
+        sent += p.take("Vallen")
+    assert "group new" in sent, sent
+
+
+def test_autoassist_found_off_is_turned_back_on(memoria_proto):
+    # Toggles flip: at each login `autoassist` was sent once, so the saved setting alternated on, off,
+    # on... and a follower who came in with it off watched the leader fight alone.
+    p = PartyHarness(memoria_proto, ["Vallen", "Carmilla"])
+    together(p, ["Vallen", "Carmilla"])
+    p.take("Carmilla")
+    p.ev("Carmilla", "toggle.state", name="autoassist", value=False)
+    p.tick()
+    assert "autoassist" in p.take("Carmilla")

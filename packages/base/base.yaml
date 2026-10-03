@@ -63,7 +63,7 @@ reflexes:
       - "mark('entered')"
   keep_toggles_on:                    # 토글은 보낼 때마다 뒤집힌다: 꺼졌다는 응답이면 다시 켠다
     on: toggle.state
-    if: "event.name in ['autoloot', 'autogold', 'autosplit'] and event.value == false"
+    if: "event.name in ['autoloot', 'autogold', 'autosplit', 'autoassist'] and event.value == false"
     do: ["ensure_toggle(event.name, true)"]
   wimpy_follows_policy:
     on: char.vitals_max

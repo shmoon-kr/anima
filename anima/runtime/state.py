@@ -193,6 +193,11 @@ class AgentState:
             self.in_group = self.name in self.group_members
         elif t == "connection.in_game":
             self.in_game = True
+            if d.get("how") == "entered":
+                # a fresh entry (after a reboot, a crash, a quit): no group, no one followed. A reconnect
+                # keeps both. Else the leader thinks it leads a group that is gone and never forms one.
+                self.in_group = False
+                self.following = None
         elif t == "connection.closed":
             self.in_game = False
 
