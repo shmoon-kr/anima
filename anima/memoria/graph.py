@@ -88,7 +88,9 @@ class Graph:
         self._avoid_rooms[vnum] = float("inf") if seconds is None else self.clock() + seconds
 
     def block_exit(self, vnum: int, d: str, seconds: float | None = None) -> None:
-        self._blocked_exits[(vnum, d)] = float("inf") if seconds is None else self.clock() + seconds
+        until = float("inf") if seconds is None else self.clock() + seconds
+        # a shorter block never shortens a longer one ("closed" right after "locked")
+        self._blocked_exits[(vnum, d)] = max(until, self._blocked_exits.get((vnum, d), until))
 
     def _active(self, table: dict, key) -> bool:
         exp = table.get(key)

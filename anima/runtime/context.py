@@ -487,7 +487,8 @@ class Context:
             vnum = self.memoria.locator(self.agent).vnum
             ex = self.memoria.world.rooms[vnum].exits.get(d) if vnum in self.memoria.world.rooms else None
             word = (ex.keyword.split() or ["door"])[0] if ex is not None else "door"
-            self.cmd(f"open {word}", force=True)
+            if self.cmd(f"open {word}", force=True) and vnum is not None:
+                self.memoria.door_tried(self.agent, vnum, d)
         self.cmd(d, move=True, force=True)
 
     def a_chase(self) -> str:

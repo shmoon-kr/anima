@@ -55,6 +55,11 @@ class Memoria:
     def attach(self, bus: Bus) -> None:
         bus.subscribe(self.on_event)
 
+    def door_tried(self, agent: str, vnum: int, d: str) -> None:
+        """An `open` sent for the door of this exit before stepping through: a "seems to be locked"
+        answer blocks this exit (it had no "closed" step before it to say which)."""
+        self._closed[agent] = (vnum, d, self.graph.clock())
+
     def conditions(self, has_light: bool = False, zone: int | None = None, agent: str | None = None) -> Conditions:
         """What a traveller can use now; with `agent`, also minus the exits only they are kept from."""
         return Conditions(has_light=has_light, night=self.night, zone=zone,

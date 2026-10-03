@@ -141,3 +141,24 @@ def test_an_avoided_zone_is_not_crossed_but_its_ends_can_be_reached(mem):
     assert mem.graph.path(4077, 6400, cond) == ["east"], "into the zone the goal is in"
     assert mem.graph.path(6400, 4077, cond) is not None, "out of the zone I stand in"
     assert mem.graph.path(6401, 4077, cond) is not None, "from deeper in it too"
+
+
+def test_open_before_the_step_then_locked_blocks_the_exit(mem):
+    # round 35: the door west of 6505 was opened before stepping (no "closed" first), "It seems
+    # to be locked." blocked nothing, and the shopping trip tried it every 75 seconds
+    t = [0.0]
+    mem.graph.clock = lambda: t[0]
+    try:
+        bus = Bus()
+        mem.attach(bus)
+        gate = 3041
+        mem.locator("Day").vnum = gate
+        mem.door_tried("Day", gate, "east")
+        bus.publish(Event("command.sent", {"text": "open gate", "source": {}}, agent="Day"))
+        bus.publish(Event("move.failed", {"reason": "locked"}, agent="Day"))
+        bus.publish(Event("command.sent", {"text": "east", "source": {}}, agent="Day"))
+        bus.publish(Event("move.failed", {"reason": "closed", "door": "gate"}, agent="Day"))
+        t[0] = 300
+        assert "east" not in mem.graph.exits_from(gate, Conditions(has_light=True)), "the step's 'closed' did not shorten it"
+    finally:
+        mem.graph.clock = __import__("anima.timescale", fromlist=["now"]).now
