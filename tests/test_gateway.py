@@ -37,6 +37,9 @@ def test_an_event_goes_out_as_its_event_line_and_narration():
     assert out == [{"k": "evline", "a": "Vallen", "s": "death: kobold"},
                    {"k": "narr", "a": "Vallen", "s": "Vallen이 코볼트를 쓰러뜨렸다"}]
     assert outgoing({"k": "notes", "notes": ["x"]}, str, str) == [], "the terminal's notes are not for a watcher"
+    clock = outgoing({"k": "ev", "a": "Vallen", "ev": {"type": "world.time", "data": {"phase": "night"}}},
+                     lambda e: None, lambda e: None)
+    assert clock == [{"k": "clock", "a": "Vallen", "phase": "night"}]
 
 
 class FakeSup:

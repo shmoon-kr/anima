@@ -238,6 +238,7 @@ LLM 은 느린 감각기관이다. 질문은 비동기, 답은 이벤트로 온�
 | `status` | `{party: {이름: {hp, hp_max, mp, mp_max, mv, mv_max, position, room, vnum, behavior, task, class, level, connected, in_game, …}}}` — 1초마다 |
 | `narr` | `{a, s}` — 해설 한 줄 (터미널의 narrate 와 같은 말) |
 | `evline` | `{a, s}` — 이벤트 한 줄 (터미널의 events 와 같은 말) |
+| `clock` | `{a, phase}` — 게임 시각 (`world.time` 의 phase: sunrise·day·sunset·night). 시(時)는 아직 없다 |
 
 - 브라우저 → 서버: `{"agents": [이름]}` (볼 캐릭터 바꾸기) 만. 입력 줄·명령은 받지 않는다 (첫 버전은 보기 전용)
 

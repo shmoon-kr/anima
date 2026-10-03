@@ -76,6 +76,8 @@ def outgoing(msg: dict[str, Any], describe: Callable[[dict], str | None],
         return [msg] if msg.get("k") in ("text", "status") else []
     ev, a = msg["ev"], msg.get("a")
     out = []
+    if ev.get("type") == "world.time" and (ev.get("data") or {}).get("phase"):
+        out.append({"k": "clock", "a": a, "phase": ev["data"]["phase"]})      # the header's game time
     if line := describe(ev):
         out.append({"k": "evline", "a": a, "s": line})
     if line := narrate(ev):
