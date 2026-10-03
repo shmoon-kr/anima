@@ -9,7 +9,7 @@ import heapq
 import time
 
 from anima import timescale
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable, Iterable
 
@@ -120,6 +120,12 @@ class Graph:
              max_rooms: int = 20000) -> list[str] | None:
         """Shortest list of directions from start to goal (a vnum or a predicate). None if unreachable."""
         cond = cond or Conditions()
+        # An avoided zone (above our level) is not walked through, but one can walk out of the one
+        # we stand in, and into the one the goal is in: a leader who strayed into it was otherwise
+        # beyond every member's reach, and waited there for them (round 26, all half an hour)
+        mine = {self.world.rooms[v].zone for v in (start, None if callable(goal) else goal) if v in self.world.rooms}
+        if cond.avoid_zones & mine:
+            cond = replace(cond, avoid_zones=cond.avoid_zones - mine)
         is_goal = goal if callable(goal) else (lambda v, g=goal: v == g)
         if is_goal(start):
             return []

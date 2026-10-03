@@ -132,3 +132,12 @@ def test_closed_then_locked_gate_blocks_the_exit(mem):
     finally:
         import time
         mem.graph.clock = time.monotonic
+
+
+def test_an_avoided_zone_is_not_crossed_but_its_ends_can_be_reached(mem):
+    # round 26: the leader explored from the Hidden Valley (zone 40) into zone 64 (levels 8-19);
+    # no member could path to him and he waited there for them, half an hour
+    cond = Conditions(has_light=True, avoid_zones=frozenset({64}))
+    assert mem.graph.path(4077, 6400, cond) == ["east"], "into the zone the goal is in"
+    assert mem.graph.path(6400, 4077, cond) is not None, "out of the zone I stand in"
+    assert mem.graph.path(6401, 4077, cond) is not None, "from deeper in it too"
