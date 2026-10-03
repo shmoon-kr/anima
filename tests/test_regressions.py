@@ -596,3 +596,13 @@ def test_a_follower_who_does_not_know_where_it_is_looks_before_going_to_the_lead
     for _ in range(8):
         p.tick(1)
     assert "look" in p.take("Carmilla")
+
+
+def test_coins_taken_are_gold_not_a_thing_in_the_bag(memoria_proto):
+    # round 49: "junk coins" -> "You don't seem to have any coins." (not_carried)
+    h = Harness(memoria_proto, agent="Lumina")
+    enter_game(h)
+    h.ev("items.inventory", items=[{"text": "a bread", "count": 1}])
+    h.ev("items.got", text="a little pile of gold coins", id="money:50/41682", **{"from": "the corpse of the orc"})
+    h.ev("items.got", text="a pile of coins", **{"from": "the corpse of the orc"})       # text adapter: no id
+    assert h.rt.state.inventory == ["a bread"]

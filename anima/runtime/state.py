@@ -11,6 +11,7 @@ from anima.protocol.envelope import SELF, Event
 FIGHT_WINDOW_S = 6.0
 NEVER = -1e9
 _CAST = re.compile(r"^cast\s+'([^']+)'")
+_COINS = re.compile(r"\b(gold )?coins?\b", re.I)
 BUY_ANSWER_S = 3.0      # a tell this soon after my `buy` is the keeper answering it
 
 
@@ -193,7 +194,9 @@ class AgentState:
             self._learn_vnums([d])
             self._item_used(d)
         elif t in ("items.got", "items.received"):
-            self.inventory.append(d.get("text", ""))
+            # coins turn into gold as they are taken: never in the bag (round 49: "junk coins")
+            if not (str(d.get("id", "")).startswith("money:") or _COINS.search(d.get("text", ""))):
+                self.inventory.append(d.get("text", ""))
             if t == "items.got" and not d.get("from"):
                 self._room_object(d.get("text", ""), -1)          # taken from the floor
         elif t == "occupant.item" and not d.get("other"):
