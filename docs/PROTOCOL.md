@@ -193,6 +193,7 @@
 | `runtime.reflex` | `{id, trigger_seq, action}` |
 | `runtime.behavior` | `{from, to, scores: [{id, score}], trigger_seq?}` — 행동 전환 |
 | `runtime.loop` | `{source, command, answer: [[type, reason]], count, pause_s}` — 같은 행동·반사·작업이 같은 명령에 같은 거절·무응답을 짧은 시간에 거듭 받아 그 명령을 `pause_s` 동안 멈춤 (D39, `anima/runtime/loops.py`) |
+| `runtime.error` | `{error, where, behavior}` — 한 틱의 판단 중 난 예외. 기록하고 다음 틱에 다시 고른다 (틱 루프가 죽어 반사만 남는 일을 막음) |
 | `runtime.task` | `{task_id, name, event: started\|step\|paused\|resumed\|succeeded\|failed\|abandoned, step?, reason?}` |
 | `runtime.party` | `{event: role_assigned\|goal_changed\|member_lost\|member_found…, detail}` |
 | `runtime.sigil` | `{event: loaded\|rejected, package, errors?}` |
@@ -233,3 +234,4 @@ LLM 은 느린 감각기관이다. 질문은 비동기, 답은 이벤트로 온�
   `You are already following $M.` / `But you are already part of a group.` 는 실패가 아니라 이미 된 상태로 `group.change` 를 낸다. 1단계 마무리 시점의 v0 이다.
 - v0 (2026-10-03, 2단계 S1, 호환 추가): 2부 §7 에 `runtime.animus` (Animus 덮어쓰기 레이어 변경 기록).
 - v0 (2026-10-03, 2부 §7, 호환 추가): `runtime.human` (사람의 입력과 조종권).
+- v0 (2026-10-03, 호환 추가): `runtime.error`.

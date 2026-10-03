@@ -368,8 +368,7 @@ class Context:
             return False
         if self.source is None:
             raise ActionError("action outside a do-list")
-        word = text.strip().split(" ", 1)[0].lower()
-        if word in api.FORBIDDEN_COMMANDS or set(text) & api.FORBIDDEN_CHARS:
+        if api.forbidden_text(text):
             raise ActionError(f"forbidden command {text!r}")
         loops = getattr(self, "loops", None)
         if loops is not None and self.source.kind in ("behavior", "reflex", "task"):

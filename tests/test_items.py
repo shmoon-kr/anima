@@ -178,3 +178,24 @@ def test_a_shared_name_is_bought_by_its_number_in_the_list(memoria_proto):
     stock = [memoria_proto.world.objs[v].short for v in items.shop_here().products]
     h.ev("shop.list", items=[{"text": t, "price": 1} for t in stock])
     assert items.buy_here(100) == f"#{stock.index(want.short) + 1}"
+    h.advance(10)
+    assert f"buy #{stock.index(want.short) + 1}" in h.take(), "round 16: the number was refused as a forbidden '#'"
+
+
+def test_a_bug_in_a_tick_is_recorded_and_the_agent_keeps_going(memoria_proto):
+    # round 16: one exception ended the tick loop of all six; only reflexes were left, for 30 minutes
+    h = agent(memoria_proto, "Vallen", vnum=shop_room(memoria_proto, ARMORY), gold=400)
+    real = h.rt.selector.tick
+    calls = []
+
+    def broken(seq=None):
+        calls.append(seq)
+        if len(calls) == 1:
+            raise ValueError("boom")
+        return real(seq)
+    h.rt.selector.tick = broken
+    h.advance(5)
+    errs = [e for e in h.events if e.type == "runtime.error"]
+    assert errs and "ValueError: boom" in errs[0].data["error"]
+    h.advance(5)
+    assert len(calls) == 2, "the next tick still chooses"

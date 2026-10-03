@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import itertools
+import sys
+import traceback
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -73,6 +75,7 @@ class AgentRuntime:
             self.party.register_items(self.agent, self.ctx.items)
         from anima.runtime.loops import LoopGuard
         self.loops = LoopGuard(self.clock, self._publish)
+        self._last_error = ""
         self.ctx.loops = self.loops
 
     def _publish(self, type_: str, data: dict[str, Any]) -> None:
@@ -124,6 +127,21 @@ class AgentRuntime:
         self.tasks.abandon("a person took over")
 
     def tick(self) -> None:
+        """One look at the world. A bug in one choice must not end the agent: the tick loop that calls
+        this has nobody to tell, and the agent would stand still forever with only its reflexes
+        (round 16: all six froze in the armory). The error is recorded and the next tick tries again."""
+        try:
+            self._tick()
+        except Exception as e:                           # noqa: BLE001 — recorded, then carry on
+            where = traceback.extract_tb(e.__traceback__)[-1]
+            text = f"{type(e).__name__}: {e}"
+            self._publish("runtime.error", {"error": text, "where": f"{where.filename}:{where.lineno}",
+                                            "behavior": self.ctx.behavior})
+            if text != self._last_error:
+                self._last_error = text
+                traceback.print_exc(file=sys.stderr)
+
+    def _tick(self) -> None:
         if not self.state.in_game:
             return
         self._refresh_numbers()

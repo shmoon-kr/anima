@@ -178,4 +178,4 @@
 ## 금지
 
 - 명령: alias, delete, display, gossip, holler, password, prompt, quit, rent, save, shout, suicide, title
-- 명령 문자열의 문자: `; $ @ #` 와 줄바꿈
+- 명령 문자열의 문자: `; $ @ #` 와 줄바꿈. 다만 명령어 뒤의 물건 번호 `#3` (`buy #3`) 은 된다

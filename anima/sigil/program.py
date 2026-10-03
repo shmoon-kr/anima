@@ -258,8 +258,7 @@ class _Validator:
     def _check_send(self, where: str, e: Expr) -> None:
         if e.ast[0] == "call" and e.ast[1] == "send" and e.ast[2] and e.ast[2][0][0] == "lit":
             text = str(e.ast[2][0][1])
-            word = text.strip().split(" ", 1)[0].lower() if text.strip() else ""
-            if word in api.FORBIDDEN_COMMANDS or set(text) & api.FORBIDDEN_CHARS:
+            if api.forbidden_text(text):
                 self.err(where, f"forbidden command {text!r}")
 
     def name(self, where: str, name: str, scope: set[str]) -> None:

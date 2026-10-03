@@ -6,6 +6,7 @@ party convention: those live in packages.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 API_VERSION = 0
@@ -184,6 +185,14 @@ FUNCS: list[Func] = [
 FORBIDDEN_COMMANDS = {"quit", "rent", "delete", "password", "shout", "gossip", "holler", "display", "prompt",
                       "title", "alias", "save", "suicide"}
 FORBIDDEN_CHARS = set(";$@#\n\r")
+_ITEM_NUMBER = re.compile(r"(?<=\s)#\d+\b")      # `buy #3`: a shop's list number (shop.c), not a client command
+
+
+def forbidden_text(text: str) -> bool:
+    """A command a Sigil may not send: a forbidden word, or a forbidden character. `#` is allowed only
+    as an item number after the command word (`buy #3`); a leading `#` stays forbidden."""
+    word = text.strip().split(" ", 1)[0].lower()
+    return word in FORBIDDEN_COMMANDS or bool(set(_ITEM_NUMBER.sub("", text)) & FORBIDDEN_CHARS)
 
 STATE_PATHS = {s.path for s in STATE} | {s.path for s in TARGET_FIELDS}
 FUNCS_BY_NAME = {f.name: f for f in FUNCS}
@@ -204,5 +213,5 @@ def generate_markdown() -> str:
     lines += ["", "## 동작 (`do` 안에서만)", "", "| 동작 | 뜻 |", "|---|---|"]
     lines += [f"| `{f.name}({', '.join(f.params)})` | {f.doc} |" for f in FUNCS if f.action]
     lines += ["", "## 금지", "", f"- 명령: {', '.join(sorted(FORBIDDEN_COMMANDS))}",
-              "- 명령 문자열의 문자: `; $ @ #` 와 줄바꿈", ""]
+              "- 명령 문자열의 문자: `; $ @ #` 와 줄바꿈. 다만 명령어 뒤의 물건 번호 `#3` (`buy #3`) 은 된다", ""]
     return "\n".join(lines)

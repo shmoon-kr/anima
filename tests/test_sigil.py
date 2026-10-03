@@ -84,6 +84,8 @@ def test_disable_and_replace():
     ({"behaviors": {"b": {"considerations": ["attack('x')"], "do": ["rest()"]}}}, "only allowed in `do`"),
     ({"behaviors": {"b": {"considerations": ["1"], "do": ["send('quit')"]}}}, "forbidden command"),
     ({"behaviors": {"b": {"considerations": ["1"], "do": ["send('say hi; quit')"]}}}, "forbidden command"),
+    ({"behaviors": {"b": {"considerations": ["1"], "do": ["send('#alias x')"]}}}, "forbidden command"),
+    ({"behaviors": {"b": {"considerations": ["1"], "do": ["send('buy #2;quit')"]}}}, "forbidden command"),
     ({"behaviors": {"b": {"considerations": ["1"], "do": ["self.hp"]}}}, "must be action calls"),
     ({"behaviors": {"b": {"considerations": ["1"], "do": ["rest()"], "task": "t"}}}, "exactly one"),
     ({"behaviors": {"b": {"considerations": ["event.victim"], "do": ["rest()"]}}}, "`event.*` is not available"),
@@ -125,3 +127,9 @@ def test_api_doc_is_generated_from_registry():
     doc_path = Path(__file__).parents[1] / "docs" / "SIGIL-API.md"
     assert doc_path.read_text(encoding="utf-8") == api.generate_markdown(), \
         "docs/SIGIL-API.md is stale: run `anima sigil api-doc`"
+
+
+def test_an_item_number_after_the_command_word_is_allowed():
+    from anima.sigil import api
+    assert not api.forbidden_text("buy #3") and not api.forbidden_text("get #12 corpse")
+    assert api.forbidden_text("#3") and api.forbidden_text("say #hi") and api.forbidden_text("buy #3x")
